@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id            String         @id @default(uuid())
+  nome          String
+  cpf           String         @unique
+  telefone      String
+  createdAt     DateTime       @default(now())
+  participacoes Participante[]
+}
+
+model Bolao {
+  id             String         @id @default(uuid())
+  concurso       String
+  dataSorteio    DateTime       // Nova: Data do sorteio
+  premioEstimado Float
+  valorCota      Float
+  dataCriacao    DateTime       @default(now())
+  ativo          Boolean        @default(true)
+  participantes  Participante[]
+}
+
+model Participante {
+  id            String    @id @default(uuid())
+  bolaoId       String
+  usuarioId     String    // Nova: Link com o usuário
+  nomesCotas    String[]  // Nova: Lista de nomes (ex: ["Eu", "Esposa", "Tio"])
+  quantidade    Int
+  valorTotal    Float
+  status        String    @default("pendente")
+  paymentId     String?
+  dataPagamento DateTime?
+  createdAt     DateTime  @default(now())
+
+  bolao   Bolao   @relation(fields: [bolaoId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+}
