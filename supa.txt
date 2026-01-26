@@ -1,0 +1,6 @@
+145cwalexandre2026
+145Cw@350.alexandre
+
+postgresql://postgres:145cwalexandre2026@db.gcglneophhrwkuteiaju.supabase.co:5432/postgres
+
+postgresql://postgres.gcglneophhrwkuteiaju:145cwalexandre2026@aws-1-us-east-1.pooler.supabase.com:5432/postgres
