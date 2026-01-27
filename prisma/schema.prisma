@@ -19,19 +19,22 @@ model Usuario {
 model Bolao {
   id             String         @id @default(uuid())
   concurso       String
-  dataSorteio    DateTime       // Nova: Data do sorteio
+  dataSorteio    DateTime
   premioEstimado Float
   valorCota      Float
   dataCriacao    DateTime       @default(now())
   ativo          Boolean        @default(true)
+  resultado      String?        // Ex: "01,02,03,04,05,06" (Preenchido após sorteio)
+  
   participantes  Participante[]
+  apostas        ApostaRealizada[] // Jogos que valeram neste bolão
 }
 
 model Participante {
   id            String    @id @default(uuid())
   bolaoId       String
-  usuarioId     String    // Nova: Link com o usuário
-  nomesCotas    String[]  // Nova: Lista de nomes (ex: ["Eu", "Esposa", "Tio"])
+  usuarioId     String
+  nomesCotas    String[]
   quantidade    Int
   valorTotal    Float
   status        String    @default("pendente")
@@ -39,6 +42,24 @@ model Participante {
   dataPagamento DateTime?
   createdAt     DateTime  @default(now())
 
-  bolao   Bolao   @relation(fields: [bolaoId], references: [id])
+  bolao   Bolao   @relation(fields: [bolaoId], references: [id], onDelete: Cascade)
   usuario Usuario @relation(fields: [usuarioId], references: [id])
+}
+
+// SEU BANCO DE DADOS PESSOAL DE JOGOS
+model CatalogoJogos {
+  id        String   @id @default(uuid())
+  nome      String   // Ex: "Jogo da Vó", "Estatística Jan/24"
+  numeros   Int[]    // Array de números: [1, 15, 22, 30, 45, 60]
+  criadoEm  DateTime @default(now())
+}
+
+// JOGOS QUE FORAM EFETIVAMENTE JOGADOS NO BOLÃO
+model ApostaRealizada {
+  id        String   @id @default(uuid())
+  bolaoId   String
+  numeros   Int[]    // Os números jogados
+  origem    String?  // Ex: "Importado do Catálogo" ou "Gerado Auto"
+  
+  bolao     Bolao    @relation(fields: [bolaoId], references: [id], onDelete: Cascade)
 }

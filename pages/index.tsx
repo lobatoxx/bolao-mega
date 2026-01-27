@@ -2,20 +2,18 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import useSWR from 'swr';
 import axios from 'axios';
-import { Copy, RefreshCw, CheckCircle, Users, QrCode, Lock, Trophy, Calendar, LogOut, Ticket, Edit, Trash2, X } from 'lucide-react';
+import { Copy, RefreshCw, CheckCircle, Users, QrCode, Trophy, Calendar, LogOut, Ticket } from 'lucide-react';
 
 // FORMATADORES
 const formatMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 const formatDate = (data: string) => new Date(data).toLocaleDateString('pt-BR');
-// Formata para o input type="date" (YYYY-MM-DD)
-const formatDateInput = (data: string) => new Date(data).toISOString().split('T')[0];
 
 const fetcher = (url: string) => axios.get(url).then(res => res.data);
 
 export default function Home() {
   // ESTADOS GLOBAIS
   const [user, setUser] = useState<any>(null);
-  const { data: bolao, mutate } = useSWR('/api/bolao', fetcher, { refreshInterval: 5000 });
+  const { data: bolao } = useSWR('/api/bolao', fetcher, { refreshInterval: 5000 });
 
   // LOGIN & REGISTER STATES
   const [cpfAuth, setCpfAuth] = useState('');
@@ -23,17 +21,6 @@ export default function Home() {
   const [telAuth, setTelAuth] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
-
-  // ADMIN STATES
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminPass, setAdminPass] = useState('');
-  
-  // FORMULÁRIO DO BOLÃO (CRIAR/EDITAR)
-  const [editMode, setEditMode] = useState(false); // Sabe se está editando
-  const [novoConcurso, setNovoConcurso] = useState('');
-  const [novoData, setNovoData] = useState('');
-  const [novoPremio, setNovoPremio] = useState('');
-  const [novoValorCota, setNovoValorCota] = useState('');
 
   // COMPRA STATES
   const [cotasQtd, setCotasQtd] = useState(1);
@@ -76,72 +63,6 @@ export default function Home() {
     finally { setAuthLoading(false); }
   };
 
-  // --- FUNÇÕES DO BOLÃO (ADMIN) ---
-  
-  // 1. PREPARAR EDIÇÃO
-  const handleEditClick = () => {
-    if(!bolao) return;
-    setEditMode(true);
-    setNovoConcurso(bolao.concurso);
-    setNovoData(formatDateInput(bolao.dataSorteio));
-    setNovoPremio(bolao.premioEstimado);
-    setNovoValorCota(bolao.valorCota);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sobe a tela pro form
-  };
-
-  // 2. CANCELAR EDIÇÃO
-  const handleCancelEdit = () => {
-    setEditMode(false);
-    setNovoConcurso('');
-    setNovoData('');
-    setNovoPremio('');
-    setNovoValorCota('');
-  };
-
-  // 3. SALVAR (CRIAR OU ATUALIZAR)
-  const handleSalvarBolao = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editMode) {
-        // MODO EDIÇÃO (PUT)
-        await axios.put('/api/bolao', {
-          id: bolao.id,
-          concurso: novoConcurso,
-          dataSorteio: novoData,
-          premioEstimado: novoPremio,
-          valorCota: novoValorCota,
-          adminPassword: adminPass
-        });
-        alert('Bolão atualizado!');
-        handleCancelEdit();
-      } else {
-        // MODO CRIAÇÃO (POST)
-        await axios.post('/api/bolao', {
-          concurso: novoConcurso,
-          dataSorteio: novoData,
-          premioEstimado: novoPremio,
-          valorCota: novoValorCota,
-          adminPassword: adminPass
-        });
-        alert('Bolão criado!');
-      }
-      mutate();
-    } catch (err: any) { alert(err.response?.data?.error || 'Erro ao salvar'); }
-  };
-
-  // 4. EXCLUIR
-  const handleExcluirBolao = async () => {
-    if (!confirm('TEM CERTEZA? Isso vai apagar o bolão e todos os pagamentos vinculados.')) return;
-    try {
-      // O Axios delete com body precisa dessa sintaxe "data"
-      await axios.delete('/api/bolao', {
-        data: { id: bolao.id, adminPassword: adminPass }
-      });
-      alert('Bolão excluído.');
-      mutate();
-    } catch (err: any) { alert(err.response?.data?.error || 'Erro ao excluir'); }
-  };
-
   // --- FUNÇÃO PAGAMENTO ---
   const handleComprar = async () => {
     if (nomesCotas.some(n => n.trim() === '')) return alert('Preencha o nome de todas as cotas.');
@@ -161,6 +82,8 @@ export default function Home() {
   const meuComprovante = bolao?.participantes?.find((p: any) => p.usuarioId === user?.id && p.status === 'pago');
 
   // --- RENDER ---
+  
+  // 1. TELA DE LOGIN / REGISTRO
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-emerald-950 flex items-center justify-center p-4">
@@ -197,6 +120,7 @@ export default function Home() {
     );
   }
 
+  // 2. TELA PRINCIPAL (APP)
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans pb-20 selection:bg-emerald-500/30">
       <Head><title>Bolão da Firma</title></Head>
@@ -219,64 +143,12 @@ export default function Home() {
 
       <main className="max-w-lg mx-auto p-4 space-y-6">
         
-        {/* BOTÃO ADMIN */}
-        <div className="flex justify-end">
-          <button onClick={() => setIsAdmin(!isAdmin)} className="text-xs text-gray-700 hover:text-gray-500">
-            {isAdmin ? 'Fechar Admin' : 'Admin'}
-          </button>
-        </div>
-
-        {/* PAINEL ADMIN (FORMULÁRIO) */}
-        {isAdmin && (
-          <div className="bg-gray-900 border border-red-900/30 p-4 rounded-xl space-y-3 shadow-xl animate-fadeIn">
-            <div className="flex justify-between items-center">
-              <h3 className="text-red-400 font-bold flex items-center gap-2">
-                <Lock size={16}/> {editMode ? 'Editar Bolão Atual' : 'Área Restrita'}
-              </h3>
-              {editMode && (
-                <button onClick={handleCancelEdit} className="text-xs text-gray-400 hover:text-white flex items-center gap-1">
-                  <X size={14}/> Cancelar Edição
-                </button>
-              )}
-            </div>
-
-            <input type="password" placeholder="Senha Mestra" className="w-full p-2 rounded bg-black border border-gray-700 focus:border-red-500 outline-none" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
-            
-            {adminPass && (
-              <div className="space-y-2 mt-2 pt-2 border-t border-gray-800">
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Concurso" className="w-full p-2 bg-black border border-gray-700 rounded" value={novoConcurso} onChange={e => setNovoConcurso(e.target.value)} />
-                  <input type="date" className="w-full p-2 bg-black border border-gray-700 rounded text-gray-400" value={novoData} onChange={e => setNovoData(e.target.value)} />
-                </div>
-                <input type="number" placeholder="Prêmio (apenas números)" className="w-full p-2 bg-black border border-gray-700 rounded" value={novoPremio} onChange={e => setNovoPremio(e.target.value)} />
-                <input type="number" placeholder="Valor Cota" className="w-full p-2 bg-black border border-gray-700 rounded" value={novoValorCota} onChange={e => setNovoValorCota(e.target.value)} />
-                
-                <button onClick={handleSalvarBolao} className={`w-full py-2 rounded font-bold transition ${editMode ? 'bg-blue-600 hover:bg-blue-500' : 'bg-red-600 hover:bg-red-500'}`}>
-                  {editMode ? '💾 Salvar Alterações' : '🚀 Abrir Novo Bolão'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
         {bolao ? (
           <>
             {/* CARD DO PRÊMIO */}
             <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-emerald-900 rounded-3xl p-6 shadow-2xl shadow-emerald-900/50 text-center border border-emerald-500/30 group">
               <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy size={120} /></div>
               
-              {/* BOTÕES DE AÇÃO ADMIN NO CARD */}
-              {isAdmin && adminPass && (
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <button onClick={handleEditClick} className="p-2 bg-black/40 hover:bg-blue-600 rounded-full backdrop-blur text-white transition" title="Editar">
-                    <Edit size={16} />
-                  </button>
-                  <button onClick={handleExcluirBolao} className="p-2 bg-black/40 hover:bg-red-600 rounded-full backdrop-blur text-white transition" title="Excluir">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              )}
-
               <span className="inline-block bg-black/30 backdrop-blur px-3 py-1 rounded-full text-xs font-medium text-emerald-100 mb-2 border border-white/10">
                 Concurso {bolao.concurso}
               </span>
@@ -314,7 +186,6 @@ export default function Home() {
                      ))}
                    </div>
                  </div>
-                 <button className="text-sm text-yellow-400 underline hover:text-yellow-300">Baixar Comprovante</button>
                </div>
             ) : (
               /* SE NÃO PAGOU: COMPRA */
@@ -409,8 +280,7 @@ export default function Home() {
         ) : (
           <div className="text-center py-20 opacity-50">
             <Trophy size={64} className="mx-auto mb-4 text-gray-600"/>
-            <p>Nenhum bolão aberto.</p>
-            {isAdmin && <p className="text-xs mt-2">Use a área Admin para criar.</p>}
+            <p>Aguardando novo bolão...</p>
           </div>
         )}
       </main>
