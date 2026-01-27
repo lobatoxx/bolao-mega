@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import axios from 'axios';
 import useSWR from 'swr';
-import { Lock, Save, List, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon, Edit, Trash2, X } from 'lucide-react';
+import { Lock, Save, List, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon, Edit, Trash2, X, Ticket } from 'lucide-react';
 import Link from 'next/link';
 
 // FORMATADORES
@@ -13,10 +13,9 @@ const formatDateInput = (data: string) => new Date(data).toISOString().split('T'
 const fetcher = (url: string) => axios.get(url).then(res => res.data);
 
 export default function AdminPage() {
-  // --- ESTADOS GLOBAIS ---
   const [password, setPassword] = useState('');
   const [isLogged, setIsLogged] = useState(false);
-  const [tab, setTab] = useState('dashboard'); // dashboard, catalogo, conferidor
+  const [tab, setTab] = useState('dashboard'); 
 
   // DADOS DO BOLÃO
   const { data: bolao, mutate } = useSWR('/api/bolao', fetcher);
@@ -27,6 +26,7 @@ export default function AdminPage() {
   const [novoData, setNovoData] = useState('');
   const [novoPremio, setNovoPremio] = useState('');
   const [novoValorCota, setNovoValorCota] = useState('');
+  const [apostasValendo, setApostasValendo] = useState<any[]>([]); // Lista de jogos ativos
 
   // --- ESTADOS: CATÁLOGO ---
   const [nomeJogo, setNomeJogo] = useState('');
@@ -37,17 +37,28 @@ export default function AdminPage() {
   const [resultadoStr, setResultadoStr] = useState('');
   const [relatorio, setRelatorio] = useState<any>(null);
 
-
-  // --- FUNÇÃO DE LOGIN ---
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password) setIsLogged(true); 
   };
 
-
   // ==========================================
   // LÓGICA DO BOLÃO (DASHBOARD)
   // ==========================================
+  
+  // Carrega as apostas do bolão sempre que o bolão mudar ou logar
+  useEffect(() => {
+    if(isLogged && bolao && tab === 'dashboard') {
+      carregarApostasValendo();
+    }
+  }, [isLogged, bolao, tab]);
+
+  const carregarApostasValendo = async () => {
+    if(!bolao) return;
+    const res = await axios.post('/api/admin', { action: 'listar_apostas', bolaoId: bolao.id, adminPassword: password });
+    setApostasValendo(res.data);
+  };
+
   const handleEditClick = () => {
     if(!bolao) return;
     setEditMode(true);
@@ -69,7 +80,6 @@ export default function AdminPage() {
     e.preventDefault();
     try {
       if (editMode) {
-        // EDITAR
         await axios.put('/api/bolao', {
           id: bolao.id,
           concurso: novoConcurso,
@@ -81,7 +91,6 @@ export default function AdminPage() {
         alert('Bolão atualizado!');
         handleCancelEdit();
       } else {
-        // CRIAR NOVO
         if(!confirm('Isso vai desativar o bolão anterior. Continuar?')) return;
         await axios.post('/api/bolao', {
           concurso: novoConcurso,
@@ -91,11 +100,7 @@ export default function AdminPage() {
           adminPassword: password
         });
         alert('Novo Bolão criado!');
-        // Limpa campos
-        setNovoConcurso('');
-        setNovoData('');
-        setNovoPremio('');
-        setNovoValorCota('');
+        setNovoConcurso(''); setNovoData(''); setNovoPremio(''); setNovoValorCota('');
       }
       mutate();
     } catch (err: any) { alert(err.response?.data?.error || 'Erro ao salvar'); }
@@ -104,14 +109,17 @@ export default function AdminPage() {
   const handleExcluirBolao = async () => {
     if (!confirm('TEM CERTEZA? Isso vai apagar o bolão e todos os pagamentos vinculados.')) return;
     try {
-      await axios.delete('/api/bolao', {
-        data: { id: bolao.id, adminPassword: password }
-      });
+      await axios.delete('/api/bolao', { data: { id: bolao.id, adminPassword: password } });
       alert('Bolão excluído.');
       mutate();
     } catch (err: any) { alert(err.response?.data?.error || 'Erro ao excluir'); }
   };
 
+  const excluirApostaDoBolao = async (id: string) => {
+    if(!confirm('Remover este jogo do bolão atual?')) return;
+    await axios.post('/api/admin', { action: 'excluir_aposta', id, adminPassword: password });
+    carregarApostasValendo();
+  };
 
   // ==========================================
   // LÓGICA DO CATÁLOGO
@@ -121,40 +129,32 @@ export default function AdminPage() {
     setListaJogos(res.data);
   };
 
-  // Carrega o catálogo apenas quando entra na aba ou loga
-  useEffect(() => { 
-    if(isLogged && tab === 'catalogo') carregarCatalogo(); 
-  }, [isLogged, tab]);
+  useEffect(() => { if(isLogged && tab === 'catalogo') carregarCatalogo(); }, [isLogged, tab]);
 
   const salvarJogo = async () => {
     const nums = numerosStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)).sort((a,b) => a-b);
     if(nums.length < 6) return alert('Insira pelo menos 6 números');
-    
-    await axios.post('/api/admin', { 
-      action: 'salvar_catalogo', 
-      nome: nomeJogo, 
-      numeros: nums, 
-      adminPassword: password 
-    });
+    await axios.post('/api/admin', { action: 'salvar_catalogo', nome: nomeJogo, numeros: nums, adminPassword: password });
     alert('Jogo Salvo!');
     setNumerosStr('');
     carregarCatalogo();
   };
+
+  const excluirDoCatalogo = async (id: string) => {
+    if(!confirm('Apagar do catálogo para sempre?')) return;
+    await axios.post('/api/admin', { action: 'excluir_catalogo', id, adminPassword: password });
+    carregarCatalogo();
+  }
 
   const jogarNoBolao = async () => {
      if(!bolao) return alert('Nenhum bolão ativo. Crie um primeiro na aba Bolão.');
      const ids = listaJogos.map(j => j.id);
      if(!confirm(`Deseja importar ${ids.length} jogos do catálogo para o Bolão atual?`)) return;
 
-     await axios.post('/api/admin', {
-       action: 'vincular_jogos',
-       bolaoId: bolao.id,
-       jogosIds: ids,
-       adminPassword: password
-     });
+     await axios.post('/api/admin', { action: 'vincular_jogos', bolaoId: bolao.id, jogosIds: ids, adminPassword: password });
      alert('Jogos vinculados ao bolão!');
+     // Se estiver na aba Dashboard, isso atualizaria a lista
   };
-
 
   // ==========================================
   // LÓGICA DO CONFERIDOR
@@ -173,7 +173,6 @@ export default function AdminPage() {
     setRelatorio(res.data);
   };
 
-
   // --- TELA DE LOGIN ADMIN ---
   if (!isLogged) {
     return (
@@ -181,22 +180,14 @@ export default function AdminPage() {
         <form onSubmit={handleLogin} className="bg-gray-900 p-8 rounded-2xl border border-gray-800 w-full max-w-sm text-center">
           <Lock size={48} className="mx-auto text-red-500 mb-4"/>
           <h1 className="text-2xl font-bold text-white mb-6">Central de Comando</h1>
-          <input 
-            type="password" 
-            placeholder="Senha Mestra" 
-            className="w-full p-3 bg-black border border-gray-700 rounded-lg text-white mb-4"
-            value={password} onChange={e => setPassword(e.target.value)}
-          />
+          <input type="password" placeholder="Senha Mestra" className="w-full p-3 bg-black border border-gray-700 rounded-lg text-white mb-4" value={password} onChange={e => setPassword(e.target.value)} />
           <button className="w-full bg-red-600 hover:bg-red-500 py-3 rounded-lg font-bold text-white">Acessar Sistema</button>
-          <div className="mt-4">
-            <Link href="/" className="text-gray-500 hover:text-white text-sm">Voltar ao site</Link>
-          </div>
+          <div className="mt-4"><Link href="/" className="text-gray-500 hover:text-white text-sm">Voltar ao site</Link></div>
         </form>
       </div>
     );
   }
 
-  // --- RENDERIZAÇÃO PRINCIPAL ---
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans flex flex-col md:flex-row">
       <Head><title>Admin - Bolão</title></Head>
@@ -239,22 +230,16 @@ export default function AdminPage() {
           )}
         </header>
 
-        {/* ---------------------------------------
-            CONTEÚDO: DASHBOARD (BOLÃO)
-            ---------------------------------------
-        */}
+        {/* DASHBOARD */}
         {tab === 'dashboard' && (
           <div className="space-y-6 animate-fadeIn">
-            {/* FORMULÁRIO */}
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold flex items-center gap-2 text-white">
                   {editMode ? <><Edit className="text-blue-400"/> Editando Bolão</> : <><Plus className="text-emerald-400"/> Novo Bolão</>}
                 </h3>
                 {editMode && (
-                  <button onClick={handleCancelEdit} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 border border-gray-600 px-2 py-1 rounded">
-                    <X size={14}/> Cancelar
-                  </button>
+                  <button onClick={handleCancelEdit} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 border border-gray-600 px-2 py-1 rounded"><X size={14}/> Cancelar</button>
                 )}
               </div>
               
@@ -284,42 +269,68 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* CARD DE VISUALIZAÇÃO */}
             {bolao ? (
-              <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl border border-gray-700 relative group">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded border border-emerald-500/20">Ativo Agora</span>
-                    <h2 className="text-2xl font-bold mt-2">Concurso {bolao.concurso}</h2>
-                    <p className="text-gray-400 text-sm">{formatDate(bolao.dataSorteio)}</p>
+              <>
+                <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl border border-gray-700 relative group">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded border border-emerald-500/20">Ativo Agora</span>
+                      <h2 className="text-2xl font-bold mt-2">Concurso {bolao.concurso}</h2>
+                      <p className="text-gray-400 text-sm">{formatDate(bolao.dataSorteio)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-400">Prêmio</p>
+                      <p className="text-xl font-bold text-emerald-400">{formatMoeda(bolao.premioEstimado)}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-400">Prêmio</p>
-                    <p className="text-xl font-bold text-emerald-400">{formatMoeda(bolao.premioEstimado)}</p>
+
+                  <div className="mt-6 flex gap-3 border-t border-gray-700 pt-4">
+                    <button onClick={handleEditClick} className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold"><Edit size={16}/> Editar</button>
+                    <button onClick={handleExcluirBolao} className="flex-1 bg-red-900/30 hover:bg-red-900/50 border border-red-900/50 text-red-400 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold"><Trash2 size={16}/> Excluir</button>
                   </div>
                 </div>
 
-                <div className="mt-6 flex gap-3 border-t border-gray-700 pt-4">
-                  <button onClick={handleEditClick} className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold">
-                    <Edit size={16}/> Editar
-                  </button>
-                  <button onClick={handleExcluirBolao} className="flex-1 bg-red-900/30 hover:bg-red-900/50 border border-red-900/50 text-red-400 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold">
-                    <Trash2 size={16}/> Excluir
-                  </button>
+                {/* --- NOVA LISTA DE JOGOS CONFIRMADOS --- */}
+                <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
+                   <div className="flex justify-between items-center mb-4">
+                     <h3 className="font-bold flex items-center gap-2"><Ticket className="text-emerald-500"/> Jogos Valendo Neste Bolão</h3>
+                     <span className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400">{apostasValendo.length} jogos</span>
+                   </div>
+                   
+                   {apostasValendo.length === 0 ? (
+                     <div className="text-center py-8 border border-dashed border-gray-700 rounded text-gray-500">
+                       <p>Nenhum jogo registrado ainda.</p>
+                       <p className="text-xs mt-1">Vá na aba "Catálogo" e clique em "Jogar Todos".</p>
+                     </div>
+                   ) : (
+                     <div className="max-h-80 overflow-y-auto space-y-2">
+                       {apostasValendo.map((aposta) => (
+                         <div key={aposta.id} className="bg-gray-800 p-3 rounded flex flex-col md:flex-row justify-between items-center gap-2">
+                           <div className="flex items-center gap-2">
+                             <span className="text-xs text-gray-400 font-mono w-4">{aposta.id.substring(0,4)}</span>
+                             <span className="text-sm font-bold text-gray-300">{aposta.origem || 'Jogo'}</span>
+                           </div>
+                           <div className="flex gap-1 flex-wrap justify-center">
+                             {aposta.numeros.map((n:number) => (
+                               <span key={n} className="bg-gray-900 border border-gray-700 w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-bold text-emerald-400">{n}</span>
+                             ))}
+                           </div>
+                           <button onClick={() => excluirApostaDoBolao(aposta.id)} className="text-red-500 hover:bg-red-900/30 p-1 rounded" title="Remover jogo">
+                             <Trash2 size={14}/>
+                           </button>
+                         </div>
+                       ))}
+                     </div>
+                   )}
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="text-center py-10 opacity-50 border border-dashed border-gray-700 rounded-xl">
-                <p>Nenhum bolão ativo no momento.</p>
-              </div>
+              <div className="text-center py-10 opacity-50 border border-dashed border-gray-700 rounded-xl"><p>Nenhum bolão ativo no momento.</p></div>
             )}
           </div>
         )}
 
-        {/* ---------------------------------------
-            CONTEÚDO: CATÁLOGO
-            ---------------------------------------
-        */}
+        {/* CATÁLOGO */}
         {tab === 'catalogo' && (
           <div className="space-y-6 animate-fadeIn">
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
@@ -328,26 +339,25 @@ export default function AdminPage() {
                 <input type="text" placeholder="Nome (ex: Jogo da Sorte 01)" value={nomeJogo} onChange={e => setNomeJogo(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600 w-full" />
                 <input type="text" placeholder="Números (ex: 05, 10, 15, 20...)" value={numerosStr} onChange={e => setNumerosStr(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600 w-full" />
               </div>
-              <button onClick={salvarJogo} className="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold flex items-center gap-2">
-                <Save size={18}/> Salvar no Banco
-              </button>
+              <button onClick={salvarJogo} className="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold flex items-center gap-2"><Save size={18}/> Salvar no Banco</button>
             </div>
 
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold flex items-center gap-2"><Database/> Meus Jogos Guardados ({listaJogos.length})</h3>
-                <button onClick={jogarNoBolao} className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold flex items-center gap-2">
-                  <PlayCircle size={16}/> Jogar Todos no Bolão Atual
-                </button>
+                <button onClick={jogarNoBolao} className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold flex items-center gap-2"><PlayCircle size={16}/> Jogar Todos no Bolão Atual</button>
               </div>
               <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
                 {listaJogos.map(j => (
                   <div key={j.id} className="bg-gray-900 p-3 rounded flex justify-between items-center">
                     <span className="font-bold text-gray-300 text-sm md:text-base">{j.nome}</span>
-                    <div className="flex gap-1 flex-wrap justify-end">
-                      {j.numeros.map((n: number) => (
-                        <span key={n} className="bg-gray-700 w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full text-[10px] md:text-xs font-bold text-emerald-400">{n}</span>
-                      ))}
+                    <div className="flex gap-1 flex-wrap justify-end items-center">
+                      <div className="flex gap-1">
+                        {j.numeros.map((n: number) => (
+                          <span key={n} className="bg-gray-700 w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full text-[10px] md:text-xs font-bold text-emerald-400">{n}</span>
+                        ))}
+                      </div>
+                      <button onClick={() => excluirDoCatalogo(j.id)} className="ml-2 text-gray-600 hover:text-red-500"><Trash2 size={14}/></button>
                     </div>
                   </div>
                 ))}
@@ -356,69 +366,36 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ---------------------------------------
-            CONTEÚDO: CONFERIDOR
-            ---------------------------------------
-        */}
+        {/* CONFERIDOR */}
         {tab === 'conferidor' && (
           <div className="space-y-6 animate-fadeIn">
             <div className="bg-gray-800 p-6 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-900/20">
               <h3 className="text-2xl font-bold mb-2 text-white">Conferidor Oficial</h3>
               <p className="text-gray-400 text-sm mb-6">Digite os números sorteadas pela Caixa e veja a mágica.</p>
-              
-              <input 
-                type="text" 
-                placeholder="Ex: 04, 11, 25, 30, 45, 59" 
-                value={resultadoStr} 
-                onChange={e => setResultadoStr(e.target.value)}
-                className="w-full text-2xl md:text-3xl font-mono text-center p-4 bg-black border border-emerald-600 rounded-xl text-emerald-400 tracking-widest focus:outline-none focus:ring-2 ring-emerald-500"
-              />
-              
-              <button onClick={conferir} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg shadow-xl">
-                CHECKAR RESULTADO 🎲
-              </button>
+              <input type="text" placeholder="Ex: 04, 11, 25, 30, 45, 59" value={resultadoStr} onChange={e => setResultadoStr(e.target.value)} className="w-full text-2xl md:text-3xl font-mono text-center p-4 bg-black border border-emerald-600 rounded-xl text-emerald-400 tracking-widest focus:outline-none focus:ring-2 ring-emerald-500" />
+              <button onClick={conferir} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg shadow-xl">CHECKAR RESULTADO 🎲</button>
             </div>
-
             {relatorio && (
               <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
                 <h4 className="text-lg font-bold mb-4">Relatório do Concurso</h4>
                 <div className="grid grid-cols-3 gap-4 mb-6 text-center">
-                  <div className="bg-gray-800 p-4 rounded-lg">
-                    <p className="text-gray-400 text-xs">Total Jogos</p>
-                    <p className="text-2xl font-bold">{relatorio.totalJogos}</p>
-                  </div>
-                  <div className="bg-gray-800 p-4 rounded-lg border border-yellow-600/50">
-                    <p className="text-gray-400 text-xs">Prêmios</p>
-                    <p className="text-2xl font-bold text-yellow-400">{relatorio.vitorias.length}</p>
-                  </div>
+                  <div className="bg-gray-800 p-4 rounded-lg"><p className="text-gray-400 text-xs">Total Jogos</p><p className="text-2xl font-bold">{relatorio.totalJogos}</p></div>
+                  <div className="bg-gray-800 p-4 rounded-lg border border-yellow-600/50"><p className="text-gray-400 text-xs">Prêmios</p><p className="text-2xl font-bold text-yellow-400">{relatorio.vitorias.length}</p></div>
                 </div>
-
                 {relatorio.vitorias.length > 0 ? (
                   <div className="space-y-2">
                     {relatorio.vitorias.map((v: any) => (
                       <div key={v.id} className="bg-gradient-to-r from-yellow-900/50 to-transparent p-4 rounded border-l-4 border-yellow-500 flex flex-col md:flex-row justify-between items-center gap-2">
-                        <div className="text-center md:text-left">
-                          <p className="font-bold text-yellow-400 text-lg">{v.premio}</p>
-                          <p className="text-xs text-gray-300">{v.origem}</p>
-                        </div>
-                        <div className="flex gap-1 flex-wrap justify-center">
-                          {v.numeros.map((n: number) => (
-                            <span key={n} className={`w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold ${v.acertosNumeros.includes(n) ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-500'}`}>
-                              {n}
-                            </span>
-                          ))}
-                        </div>
+                        <div className="text-center md:text-left"><p className="font-bold text-yellow-400 text-lg">{v.premio}</p><p className="text-xs text-gray-300">{v.origem}</p></div>
+                        <div className="flex gap-1 flex-wrap justify-center">{v.numeros.map((n: number) => (<span key={n} className={`w-8 h-8 flex items-center justify-center rounded-full text-xs font-bold ${v.acertosNumeros.includes(n) ? 'bg-emerald-500 text-white' : 'bg-gray-700 text-gray-500'}`}>{n}</span>))}</div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-center text-gray-500 py-4">Nenhum prêmio dessa vez... 😢</p>
-                )}
+                ) : (<p className="text-center text-gray-500 py-4">Nenhum prêmio dessa vez... 😢</p>)}
               </div>
             )}
           </div>
         )}
-        
       </main>
     </div>
   );

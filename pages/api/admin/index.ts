@@ -12,24 +12,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // 1. SALVAR NO CATÁLOGO
+    // --- CATÁLOGO ---
     if (action === 'salvar_catalogo') {
-      const { nome, numeros } = req.body; // numeros deve ser array [1,2,3...]
+      const { nome, numeros } = req.body;
       const jogo = await prisma.catalogoJogos.create({
         data: { nome, numeros }
       });
       return res.status(200).json(jogo);
     }
 
-    // 2. LISTAR CATÁLOGO
     if (action === 'listar_catalogo') {
       const jogos = await prisma.catalogoJogos.findMany({ orderBy: { criadoEm: 'desc' } });
       return res.status(200).json(jogos);
     }
 
-    // 3. VINCULAR JOGOS AO BOLÃO ATUAL
+    if (action === 'excluir_catalogo') {
+       const { id } = req.body;
+       await prisma.catalogoJogos.delete({ where: { id } });
+       return res.status(200).json({ message: 'Deletado' });
+    }
+
+    // --- APOSTAS DO BOLÃO (VÍNCULO) ---
     if (action === 'vincular_jogos') {
-      const { bolaoId, jogosIds } = req.body; // Array de IDs do catalogo
+      const { bolaoId, jogosIds } = req.body; 
       
       const jogosDoCatalogo = await prisma.catalogoJogos.findMany({
         where: { id: { in: jogosIds } }
@@ -47,11 +52,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ message: `${jogosDoCatalogo.length} jogos vinculados!` });
     }
 
-    // 4. CONFERIDOR (A MÁGICA)
-    if (action === 'conferir') {
-      const { bolaoId, numerosSorteados } = req.body; // array [1,2,3,4,5,6]
+    // NOVA: LISTAR O QUE TÁ VALENDO
+    if (action === 'listar_apostas') {
+      const { bolaoId } = req.body;
+      const apostas = await prisma.apostaRealizada.findMany({
+        where: { bolaoId },
+        orderBy: { id: 'desc' }
+      });
+      return res.status(200).json(apostas);
+    }
 
-      // Busca todas as apostas desse bolão
+    // NOVA: EXCLUIR APOSTA DO BOLÃO
+    if (action === 'excluir_aposta') {
+      const { id } = req.body;
+      await prisma.apostaRealizada.delete({ where: { id } });
+      return res.status(200).json({ message: 'Aposta removida do bolão' });
+    }
+
+    // --- CONFERIDOR ---
+    if (action === 'conferir') {
+      const { bolaoId, numerosSorteados } = req.body; 
+
       const apostas = await prisma.apostaRealizada.findMany({
         where: { bolaoId }
       });
@@ -68,7 +89,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       });
 
-      // Filtra só quem ganhou algo (quadra ou mais)
       const vitorias = resultados.filter(r => r.acertosQtd >= 4).sort((a,b) => b.acertosQtd - a.acertosQtd);
       
       return res.status(200).json({ totalJogos: apostas.length, vitorias, detalhes: resultados });
