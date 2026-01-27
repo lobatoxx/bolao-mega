@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import axios from 'axios';
 import useSWR from 'swr';
-import { Lock, Save, List, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon, Edit, Trash2, X, Ticket } from 'lucide-react';
+import { Lock, Save, List, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon, Edit, Trash2, X, Ticket, CheckSquare, Square } from 'lucide-react';
 import Link from 'next/link';
 
 // FORMATADORES
@@ -26,12 +26,13 @@ export default function AdminPage() {
   const [novoData, setNovoData] = useState('');
   const [novoPremio, setNovoPremio] = useState('');
   const [novoValorCota, setNovoValorCota] = useState('');
-  const [apostasValendo, setApostasValendo] = useState<any[]>([]); // Lista de jogos ativos
+  const [apostasValendo, setApostasValendo] = useState<any[]>([]);
 
   // --- ESTADOS: CATÁLOGO ---
   const [nomeJogo, setNomeJogo] = useState('');
   const [numerosStr, setNumerosStr] = useState('');
   const [listaJogos, setListaJogos] = useState<any[]>([]);
+  const [jogosSelecionados, setJogosSelecionados] = useState<string[]>([]); // ARRAY DE IDs SELECIONADOS
 
   // --- ESTADOS: CONFERIDOR ---
   const [resultadoStr, setResultadoStr] = useState('');
@@ -45,8 +46,6 @@ export default function AdminPage() {
   // ==========================================
   // LÓGICA DO BOLÃO (DASHBOARD)
   // ==========================================
-  
-  // Carrega as apostas do bolão sempre que o bolão mudar ou logar
   useEffect(() => {
     if(isLogged && bolao && tab === 'dashboard') {
       carregarApostasValendo();
@@ -122,7 +121,7 @@ export default function AdminPage() {
   };
 
   // ==========================================
-  // LÓGICA DO CATÁLOGO
+  // LÓGICA DO CATÁLOGO (COM SELEÇÃO)
   // ==========================================
   const carregarCatalogo = async () => {
     const res = await axios.post('/api/admin', { action: 'listar_catalogo', adminPassword: password });
@@ -146,14 +145,38 @@ export default function AdminPage() {
     carregarCatalogo();
   }
 
-  const jogarNoBolao = async () => {
-     if(!bolao) return alert('Nenhum bolão ativo. Crie um primeiro na aba Bolão.');
-     const ids = listaJogos.map(j => j.id);
-     if(!confirm(`Deseja importar ${ids.length} jogos do catálogo para o Bolão atual?`)) return;
+  // --- LÓGICA DE SELEÇÃO MÚLTIPLA ---
+  const toggleSelecao = (id: string) => {
+    if (jogosSelecionados.includes(id)) {
+      setJogosSelecionados(jogosSelecionados.filter(itemId => itemId !== id));
+    } else {
+      setJogosSelecionados([...jogosSelecionados, id]);
+    }
+  };
 
-     await axios.post('/api/admin', { action: 'vincular_jogos', bolaoId: bolao.id, jogosIds: ids, adminPassword: password });
-     alert('Jogos vinculados ao bolão!');
-     // Se estiver na aba Dashboard, isso atualizaria a lista
+  const selecionarTodos = () => {
+    if (jogosSelecionados.length === listaJogos.length) {
+      setJogosSelecionados([]); // Desmarca tudo
+    } else {
+      setJogosSelecionados(listaJogos.map(j => j.id)); // Marca tudo
+    }
+  };
+
+  const jogarSelecionados = async () => {
+     if(!bolao) return alert('Nenhum bolão ativo. Crie um primeiro na aba Bolão.');
+     if(jogosSelecionados.length === 0) return alert('Selecione pelo menos um jogo da lista.');
+
+     if(!confirm(`Confirmar importação de ${jogosSelecionados.length} jogos para o Bolão atual?`)) return;
+
+     await axios.post('/api/admin', { 
+       action: 'vincular_jogos', 
+       bolaoId: bolao.id, 
+       jogosIds: jogosSelecionados, 
+       adminPassword: password 
+     });
+     
+     alert('Jogos vinculados com sucesso!');
+     setJogosSelecionados([]); // Limpa a seleção após enviar
   };
 
   // ==========================================
@@ -283,24 +306,21 @@ export default function AdminPage() {
                       <p className="text-xl font-bold text-emerald-400">{formatMoeda(bolao.premioEstimado)}</p>
                     </div>
                   </div>
-
                   <div className="mt-6 flex gap-3 border-t border-gray-700 pt-4">
                     <button onClick={handleEditClick} className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold"><Edit size={16}/> Editar</button>
                     <button onClick={handleExcluirBolao} className="flex-1 bg-red-900/30 hover:bg-red-900/50 border border-red-900/50 text-red-400 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold"><Trash2 size={16}/> Excluir</button>
                   </div>
                 </div>
 
-                {/* --- NOVA LISTA DE JOGOS CONFIRMADOS --- */}
                 <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
                    <div className="flex justify-between items-center mb-4">
                      <h3 className="font-bold flex items-center gap-2"><Ticket className="text-emerald-500"/> Jogos Valendo Neste Bolão</h3>
                      <span className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400">{apostasValendo.length} jogos</span>
                    </div>
-                   
                    {apostasValendo.length === 0 ? (
                      <div className="text-center py-8 border border-dashed border-gray-700 rounded text-gray-500">
                        <p>Nenhum jogo registrado ainda.</p>
-                       <p className="text-xs mt-1">Vá na aba "Catálogo" e clique em "Jogar Todos".</p>
+                       <p className="text-xs mt-1">Vá na aba "Catálogo" e importe jogos.</p>
                      </div>
                    ) : (
                      <div className="max-h-80 overflow-y-auto space-y-2">
@@ -330,9 +350,10 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* CATÁLOGO */}
+        {/* CATÁLOGO (AGORA COM SELEÇÃO) */}
         {tab === 'catalogo' && (
           <div className="space-y-6 animate-fadeIn">
+            {/* NOVO JOGO */}
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-emerald-400"><Plus/> Novo Jogo no Catálogo</h3>
               <div className="grid md:grid-cols-2 gap-4">
@@ -342,22 +363,44 @@ export default function AdminPage() {
               <button onClick={salvarJogo} className="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold flex items-center gap-2"><Save size={18}/> Salvar no Banco</button>
             </div>
 
+            {/* LISTA DE JOGOS COM SELEÇÃO */}
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold flex items-center gap-2"><Database/> Meus Jogos Guardados ({listaJogos.length})</h3>
-                <button onClick={jogarNoBolao} className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold flex items-center gap-2"><PlayCircle size={16}/> Jogar Todos no Bolão Atual</button>
+              <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <h3 className="text-xl font-bold flex items-center gap-2"><Database/> Meus Jogos ({listaJogos.length})</h3>
+                
+                <div className="flex gap-2 w-full md:w-auto">
+                   {/* BOTÃO JOGAR SELECIONADOS */}
+                   <button onClick={jogarSelecionados} disabled={jogosSelecionados.length === 0} className={`flex-1 md:flex-none px-4 py-2 rounded text-sm font-bold flex items-center justify-center gap-2 transition ${jogosSelecionados.length > 0 ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}>
+                     <PlayCircle size={16}/> Jogar ({jogosSelecionados.length})
+                   </button>
+                   
+                   {/* BOTÃO SELECIONAR TODOS */}
+                   <button onClick={selecionarTodos} className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-bold text-gray-300">
+                      {jogosSelecionados.length === listaJogos.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                   </button>
+                </div>
               </div>
+
               <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
                 {listaJogos.map(j => (
-                  <div key={j.id} className="bg-gray-900 p-3 rounded flex justify-between items-center">
-                    <span className="font-bold text-gray-300 text-sm md:text-base">{j.nome}</span>
+                  <div key={j.id} className={`p-3 rounded flex justify-between items-center cursor-pointer transition border ${jogosSelecionados.includes(j.id) ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-gray-900 border-transparent hover:bg-gray-800'}`} onClick={() => toggleSelecao(j.id)}>
+                    
+                    <div className="flex items-center gap-3">
+                       {/* CHECKBOX VISUAL */}
+                       <div className={`w-5 h-5 rounded border flex items-center justify-center ${jogosSelecionados.includes(j.id) ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
+                          {jogosSelecionados.includes(j.id) && <CheckSquare size={14} className="text-black"/>}
+                       </div>
+                       
+                       <span className={`font-bold text-sm md:text-base ${jogosSelecionados.includes(j.id) ? 'text-emerald-300' : 'text-gray-300'}`}>{j.nome}</span>
+                    </div>
+
                     <div className="flex gap-1 flex-wrap justify-end items-center">
                       <div className="flex gap-1">
                         {j.numeros.map((n: number) => (
                           <span key={n} className="bg-gray-700 w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full text-[10px] md:text-xs font-bold text-emerald-400">{n}</span>
                         ))}
                       </div>
-                      <button onClick={() => excluirDoCatalogo(j.id)} className="ml-2 text-gray-600 hover:text-red-500"><Trash2 size={14}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); excluirDoCatalogo(j.id); }} className="ml-2 text-gray-600 hover:text-red-500 p-2"><Trash2 size={14}/></button>
                     </div>
                   </div>
                 ))}
