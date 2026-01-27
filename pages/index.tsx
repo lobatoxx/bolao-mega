@@ -6,7 +6,7 @@ import { Copy, RefreshCw, CheckCircle, Users, QrCode, Trophy, Calendar, LogOut, 
 
 // FORMATADORES
 const formatMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-const formatDate = (data: string) => new Date(data).toLocaleDateString('pt-BR');
+const formatDate = (data: string | null) => data ? new Date(data).toLocaleDateString('pt-BR') : 'Pendente';
 
 const fetcher = (url: string) => axios.get(url).then(res => res.data);
 
@@ -80,6 +80,8 @@ export default function Home() {
   };
 
   const meuComprovante = bolao?.participantes?.find((p: any) => p.usuarioId === user?.id && p.status === 'pago');
+
+  const participantesConfirmados = bolao?.participantes?.filter((p: any) => p.status === 'pago') || [];
 
   // --- RENDER ---
   
@@ -248,11 +250,12 @@ export default function Home() {
                <div className="p-4 bg-gray-800/50 flex justify-between items-center">
                  <h3 className="font-bold flex items-center gap-2"><Users size={18} className="text-emerald-500"/> Galera Confirmada</h3>
                  <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded-full border border-emerald-500/20">
-                   {bolao.participantes?.length || 0} Pagos
+                   {participantesConfirmados.length} Pagos  {/* <-- USANDO A VARIÁVEL FILTRADA */}
                  </span>
                </div>
+               
                <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
-                 {bolao.participantes?.map((p: any) => (
+                 {participantesConfirmados.map((p: any) => (  // <-- USANDO A VARIÁVEL FILTRADA
                    <div key={p.id} className="p-4 flex justify-between items-center hover:bg-white/5 transition">
                      <div className="flex items-center gap-3">
                        <div className="bg-emerald-500/10 p-2 rounded-full">
@@ -271,7 +274,8 @@ export default function Home() {
                      </div>
                    </div>
                  ))}
-                 {(!bolao.participantes || bolao.participantes.length === 0) && (
+                 
+                 {participantesConfirmados.length === 0 && (
                    <p className="text-center p-6 text-gray-600 text-sm">Ninguém pagou ainda. Seja o primeiro!</p>
                  )}
                </div>
