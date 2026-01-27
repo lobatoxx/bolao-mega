@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import axios from 'axios';
 import useSWR from 'swr';
-import { Lock, Save, List, CheckSquare, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon } from 'lucide-react';
+import { Lock, Save, List, CheckSquare, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon, Edit, Trash2, X, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+
+// FORMATADORES
+const formatMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+const formatDate = (data: string) => new Date(data).toLocaleDateString('pt-BR');
+const formatDateInput = (data: string) => new Date(data).toISOString().split('T')[0];
 
 const fetcher = (url: string) => axios.get(url).then(res => res.data);
 
@@ -12,18 +17,149 @@ export default function AdminPage() {
   const [isLogged, setIsLogged] = useState(false);
   const [tab, setTab] = useState('dashboard'); // dashboard, catalogo, sorteio
 
-  // DADOS
-  const { data: bolao } = useSWR('/api/bolao', fetcher);
+  // DADOS DO BOLÃO
+  const { data: bolao, mutate } = useSWR('/api/bolao', fetcher);
   
-  // --- FUNÇÃO DE LOGIN FAKE (FRONT) ---
+  // ESTADOS DO FORMULÁRIO DE BOLÃO (CRIAR/EDITAR)
+  const [editMode, setEditMode] = useState(false);
+  const [novoConcurso, setNovoConcurso] = useState('');
+  const [novoData, setNovoData] = useState('');
+  const [novoPremio, setNovoPremio] = useState('');
+  const [novoValorCota, setNovoValorCota] = useState('');
+
+  // --- FUNÇÃO DE LOGIN FAKE ---
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password) setIsLogged(true); // A validação real acontece na API a cada requisição
+    if (password) setIsLogged(true); 
   };
 
-  // --- COMPONENTES INTERNOS ---
-  
-  // 1. GESTÃO DE CATÁLOGO
+  // --- FUNÇÕES DE GESTÃO DO BOLÃO ---
+  const handleEditClick = () => {
+    if(!bolao) return;
+    setEditMode(true);
+    setNovoConcurso(bolao.concurso);
+    setNovoData(formatDateInput(bolao.dataSorteio));
+    setNovoPremio(bolao.premioEstimado);
+    setNovoValorCota(bolao.valorCota);
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setNovoConcurso('');
+    setNovoData('');
+    setNovoPremio('');
+    setNovoValorCota('');
+  };
+
+  const handleSalvarBolao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editMode) {
+        // EDITAR
+        await axios.put('/api/bolao', {
+          id: bolao.id,
+          concurso: novoConcurso,
+          dataSorteio: novoData,
+          premioEstimado: novoPremio,
+          valorCota: novoValorCota,
+          adminPassword: password
+        });
+        alert('Bolão atualizado!');
+        handleCancelEdit();
+      } else {
+        // CRIAR NOVO
+        if(!confirm('Isso vai desativar o bolão anterior. Continuar?')) return;
+        await axios.post('/api/bolao', {
+          concurso: novoConcurso,
+          dataSorteio: novoData,
+          premioEstimado: novoPremio,
+          valorCota: novoValorCota,
+          adminPassword: password
+        });
+        alert('Novo Bolão criado!');
+      }
+      mutate();
+    } catch (err: any) { alert(err.response?.data?.error || 'Erro ao salvar'); }
+  };
+
+  const handleExcluirBolao = async () => {
+    if (!confirm('TEM CERTEZA? Isso vai apagar o bolão e todos os pagamentos vinculados.')) return;
+    try {
+      await axios.delete('/api/bolao', {
+        data: { id: bolao.id, adminPassword: password }
+      });
+      alert('Bolão excluído.');
+      mutate();
+    } catch (err: any) { alert(err.response?.data?.error || 'Erro ao excluir'); }
+  };
+
+
+  // --- COMPONENTE: PAINEL DE GESTÃO DO BOLÃO ---
+  const BolaoManager = () => {
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        
+        {/* FORMULÁRIO */}
+        <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
+          <div className="flex justify-between items-center mb-4">
+             <h3 className="text-xl font-bold flex items-center gap-2 text-white">
+               {editMode ? <><Edit className="text-blue-400"/> Editando Bolão</> : <><Plus className="text-emerald-400"/> Novo Bolão</>}
+             </h3>
+             {editMode && (
+               <button onClick={handleCancelEdit} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 border border-gray-600 px-2 py-1 rounded">
+                 <X size={14}/> Cancelar
+               </button>
+             )}
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <input type="text" placeholder="Concurso (ex: 2550)" className="p-3 bg-gray-900 rounded border border-gray-600 w-full" value={novoConcurso} onChange={e => setNovoConcurso(e.target.value)} />
+            <input type="date" className="p-3 bg-gray-900 rounded border border-gray-600 w-full text-gray-300" value={novoData} onChange={e => setNovoData(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <input type="number" placeholder="Prêmio Estimado" className="p-3 bg-gray-900 rounded border border-gray-600 w-full" value={novoPremio} onChange={e => setNovoPremio(e.target.value)} />
+            <input type="number" placeholder="Valor Cota" className="p-3 bg-gray-900 rounded border border-gray-600 w-full" value={novoValorCota} onChange={e => setNovoValorCota(e.target.value)} />
+          </div>
+
+          <button onClick={handleSalvarBolao} className={`w-full mt-4 py-3 rounded font-bold transition flex items-center justify-center gap-2 ${editMode ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
+            {editMode ? <><Save size={18}/> Salvar Alterações</> : <><Plus size={18}/> Abrir Bolão</>}
+          </button>
+        </div>
+
+        {/* VISUALIZAÇÃO DO BOLÃO ATIVO */}
+        {bolao ? (
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl border border-gray-700 relative group">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded border border-emerald-500/20">Ativo Agora</span>
+                <h2 className="text-2xl font-bold mt-2">Concurso {bolao.concurso}</h2>
+                <p className="text-gray-400 text-sm">{formatDate(bolao.dataSorteio)}</p>
+              </div>
+              <div className="text-right">
+                 <p className="text-sm text-gray-400">Prêmio</p>
+                 <p className="text-xl font-bold text-emerald-400">{formatMoeda(bolao.premioEstimado)}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3 border-t border-gray-700 pt-4">
+              <button onClick={handleEditClick} className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold">
+                <Edit size={16}/> Editar
+              </button>
+              <button onClick={handleExcluirBolao} className="flex-1 bg-red-900/30 hover:bg-red-900/50 border border-red-900/50 text-red-400 py-2 rounded flex items-center justify-center gap-2 text-sm font-bold">
+                <Trash2 size={16}/> Excluir
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-10 opacity-50 border border-dashed border-gray-700 rounded-xl">
+            <p>Nenhum bolão ativo no momento.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // --- COMPONENTE: GESTÃO DE CATÁLOGO ---
   const CatalogoManager = () => {
     const [nomeJogo, setNomeJogo] = useState('');
     const [numerosStr, setNumerosStr] = useState('');
@@ -50,8 +186,7 @@ export default function AdminPage() {
     };
 
     const jogarNoBolao = async () => {
-       if(!bolao) return alert('Nenhum bolão ativo');
-       // Pega todos os IDs selecionados (aqui simplificado para "Todos do Catalogo" como exemplo, ou pode criar checkbox)
+       if(!bolao) return alert('Nenhum bolão ativo. Crie um primeiro na aba Bolão.');
        const ids = listaJogos.map(j => j.id);
        if(!confirm(`Deseja importar ${ids.length} jogos do catálogo para o Bolão atual?`)) return;
 
@@ -71,8 +206,8 @@ export default function AdminPage() {
         <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
           <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-emerald-400"><Plus/> Novo Jogo no Catálogo</h3>
           <div className="grid md:grid-cols-2 gap-4">
-            <input type="text" placeholder="Nome (ex: Jogo da Sorte 01)" value={nomeJogo} onChange={e => setNomeJogo(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600" />
-            <input type="text" placeholder="Números (ex: 05, 10, 15, 20...)" value={numerosStr} onChange={e => setNumerosStr(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600" />
+            <input type="text" placeholder="Nome (ex: Jogo da Sorte 01)" value={nomeJogo} onChange={e => setNomeJogo(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600 w-full" />
+            <input type="text" placeholder="Números (ex: 05, 10, 15, 20...)" value={numerosStr} onChange={e => setNumerosStr(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600 w-full" />
           </div>
           <button onClick={salvarJogo} className="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold flex items-center gap-2">
             <Save size={18}/> Salvar no Banco
@@ -103,13 +238,13 @@ export default function AdminPage() {
     );
   };
 
-  // 2. CONFERIDOR DE RESULTADOS
+  // --- COMPONENTE: CONFERIDOR ---
   const Conferidor = () => {
     const [resultadoStr, setResultadoStr] = useState('');
     const [relatorio, setRelatorio] = useState<any>(null);
 
     const conferir = async () => {
-      if(!bolao) return alert('Erro: Bolão não carregado');
+      if(!bolao) return alert('Erro: Bolão não carregado. Crie um bolão primeiro.');
       const nums = resultadoStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
       if(nums.length < 6) return alert('Insira as 6 dezenas sorteadas');
 
@@ -126,7 +261,7 @@ export default function AdminPage() {
       <div className="space-y-6 animate-fadeIn">
         <div className="bg-gray-800 p-6 rounded-xl border border-emerald-500/30 shadow-lg shadow-emerald-900/20">
           <h3 className="text-2xl font-bold mb-2 text-white">Conferidor Oficial</h3>
-          <p className="text-gray-400 text-sm mb-6">Digite os números sorteados pela Caixa e veja a mágica.</p>
+          <p className="text-gray-400 text-sm mb-6">Digite os números sorteadas pela Caixa e veja a mágica.</p>
           
           <input 
             type="text" 
@@ -204,26 +339,27 @@ export default function AdminPage() {
     );
   }
 
+  // --- RENDERIZAÇÃO PRINCIPAL ---
   return (
-    <div className="min-h-screen bg-gray-950 text-white font-sans flex">
+    <div className="min-h-screen bg-gray-950 text-white font-sans flex flex-col md:flex-row">
       <Head><title>Admin - Bolão</title></Head>
       
       {/* SIDEBAR */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 hidden md:block">
-        <div className="p-6 border-b border-gray-800">
+      <aside className="w-full md:w-64 bg-gray-900 border-b md:border-r border-gray-800">
+        <div className="p-6 border-b border-gray-800 hidden md:block">
           <h2 className="font-bold text-xl flex items-center gap-2"><LayoutDashboard/> Admin</h2>
         </div>
-        <nav className="p-4 space-y-2">
+        <nav className="p-4 space-y-2 flex md:block overflow-x-auto">
           <button onClick={() => setTab('dashboard')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${tab === 'dashboard' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
-            <List size={18}/> Bolão Atual
+            <List size={18}/> <span className="hidden md:inline">Bolão Atual</span><span className="md:hidden">Bolão</span>
           </button>
           <button onClick={() => setTab('catalogo')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${tab === 'catalogo' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
-            <Database size={18}/> Catálogo de Jogos
+            <Database size={18}/> <span className="hidden md:inline">Catálogo</span><span className="md:hidden">Jogos</span>
           </button>
           <button onClick={() => setTab('conferidor')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${tab === 'conferidor' ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
-            <Award size={18}/> Conferidor
+            <Award size={18}/> <span className="hidden md:inline">Conferidor</span><span className="md:hidden">Checar</span>
           </button>
-          <div className="pt-8 border-t border-gray-800 mt-4">
+          <div className="hidden md:block pt-8 border-t border-gray-800 mt-4">
             <Link href="/" className="w-full text-left p-3 rounded flex items-center gap-3 text-gray-400 hover:text-white hover:bg-gray-800">
               <HomeIcon size={18}/> Ver Site
             </Link>
@@ -232,29 +368,24 @@ export default function AdminPage() {
       </aside>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-2xl md:text-3xl font-bold">
             {tab === 'dashboard' && 'Gestão do Bolão'}
             {tab === 'catalogo' && 'Meus Jogos Salvos'}
             {tab === 'conferidor' && 'Conferência de Resultados'}
           </h1>
           {bolao && (
-            <span className="bg-emerald-900 text-emerald-300 px-4 py-1 rounded-full text-sm border border-emerald-500/30">
-              Concurso Ativo: {bolao.concurso}
+            <span className="bg-emerald-900 text-emerald-300 px-4 py-1 rounded-full text-xs md:text-sm border border-emerald-500/30">
+              Ativo: {bolao.concurso}
             </span>
           )}
         </header>
 
+        {tab === 'dashboard' && <BolaoManager />}
         {tab === 'catalogo' && <CatalogoManager />}
         {tab === 'conferidor' && <Conferidor />}
         
-        {tab === 'dashboard' && (
-          <div className="text-center py-20 bg-gray-900 rounded-xl border border-gray-800 border-dashed">
-            <h3 className="text-gray-400 text-xl">Integração Estatística em Breve</h3>
-            <p className="text-gray-500 mt-2">Aqui vamos colocar a IA para gerar jogos baseados no histórico.</p>
-          </div>
-        )}
       </main>
     </div>
   );
