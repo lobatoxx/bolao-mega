@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
 import { payment } from '../../../lib/mercadopago';
-import { enviarNotificacaoTelegram } from '../../../lib/telegram'; // Importa nosso enviador
+import { enviarNotificacaoTelegram } from '../../../lib/telegram';
 
 const prisma = new PrismaClient();
 
-// Função para formatar moeda
+// Função para formatar moeda (R$)
 const formatMoeda = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -19,9 +19,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const status = paymentData.status;
       const externalReference = paymentData.external_reference; // ID do participante
 
+      // Só processa se estiver APROVADO e tiver o ID do participante
       if (status === 'approved' && externalReference) {
         
-        // 1. Atualiza o status para PAGO
+        // 1. Atualiza o status para PAGO no banco e pega os dados atualizados
         const participanteAtualizado = await prisma.participante.update({
           where: { id: externalReference },
           data: { 
@@ -30,8 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             dataPagamento: new Date()
           },
           include: { 
-            usuario: true, // Pega o nome de quem pagou
-            bolao: true    // Pega dados do bolão
+            usuario: true, // Para pegar o nome de quem pagou
+            bolao: true    // Para pegar prêmio e concurso
           }
         });
 
@@ -42,39 +43,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             status: 'pago'
           },
           include: { usuario: true },
-          orderBy: { dataPagamento: 'asc' } // Ordem de chegada
+          orderBy: { dataPagamento: 'asc' } // Ordem de chegada (quem pagou primeiro aparece em cima)
         });
 
-        // 3. Monta a mensagem bonitona pro Telegram
+        // 3. Cálculos Financeiros
         const totalArrecadado = listaPagos.reduce((acc, p) => acc + p.valorTotal, 0);
         const totalCotas = listaPagos.reduce((acc, p) => acc + p.quantidade, 0);
         
-        // Cria a lista de nomes
+        // 4. Monta a lista de nomes (AGORA COM NOME COMPLETO)
         let listaNomesFormatada = '';
         listaPagos.forEach((p, index) => {
-          listaNomesFormatada += `${index + 1}. <b>${p.usuario.nome.split(' ')[0]}</b> (${p.quantidade} cotas)\n`;
+          // Antes era: p.usuario.nome.split(' ')[0]
+          // Agora é: p.usuario.nome (Nome completo do cadastro)
+          listaNomesFormatada += `${index + 1}. <b>${p.usuario.nome}</b> (${p.quantidade} cotas)\n`;
         });
 
+        // 5. Monta a mensagem para o Telegram
         const mensagem = `
-✅ <b>PAGAMENTO CONFIRMADO!</b>
+✅ <b>NOVO PAGAMENTO CONFIRMADO!</b>
 
-👤 <b>Quem:</b> ${participanteAtualizado.usuario.nome}
+👤 <b>Pagante:</b> ${participanteAtualizado.usuario.nome}
 💰 <b>Valor:</b> ${formatMoeda(participanteAtualizado.valorTotal)}
 🎟 <b>Cotas:</b> ${participanteAtualizado.quantidade}
 
 ━━━━━━━━━━━━━━━━
 📊 <b>RESUMO DO BOLÃO</b>
-🏆 Concurso: ${participanteAtualizado.bolao.concurso}
-👥 Total Pagantes: ${listaPagos.length}
-🎟 Total Cotas: ${totalCotas}
-💸 <b>Caixa Atual: ${formatMoeda(totalArrecadado)}</b>
+🏆 <b>Concurso:</b> ${participanteAtualizado.bolao.concurso}
+💰 <b>Prêmio Estimado: ${formatMoeda(participanteAtualizado.bolao.premioEstimado)}</b>
+
+👥 <b>Participantes:</b> ${listaPagos.length}
+🎟 <b>Total de Cotas:</b> ${totalCotas}
+💸 <b>Caixa Arrecadado: ${formatMoeda(totalArrecadado)}</b>
 ━━━━━━━━━━━━━━━━
 
-📋 <b>LISTA ATUALIZADA:</b>
+📋 <b>LISTA DE CONFIRMADOS:</b>
 ${listaNomesFormatada}
         `;
 
-        // 4. Envia pro Telegram
+        // 6. Envia pro Telegram
         await enviarNotificacaoTelegram(mensagem);
       }
     }
@@ -83,7 +89,7 @@ ${listaNomesFormatada}
 
   } catch (error) {
     console.error('Erro no webhook:', error);
-    // Retorna 200 mesmo com erro interno para o Mercado Pago não ficar tentando reenviar infinitamente
-    return res.status(200).json({ error: 'Erro interno, mas recebido' });
+    // Retorna 200 para o Mercado Pago não ficar reenviando em loop, mesmo se der erro no Telegram
+    return res.status(200).json({ error: 'Erro interno processado' });
   }
 }
