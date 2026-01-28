@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import useSWR from 'swr';
 import axios from 'axios';
-import { Copy, RefreshCw, CheckCircle, Users, QrCode, Trophy, Calendar, LogOut, Ticket } from 'lucide-react';
+import { Copy, RefreshCw, CheckCircle, Users, QrCode, Trophy, Calendar, LogOut, Ticket, PlusCircle, ArrowLeft } from 'lucide-react';
 
 // FORMATADORES
 const formatMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
@@ -27,6 +27,9 @@ export default function Home() {
   const [nomesCotas, setNomesCotas] = useState<string[]>(['']);
   const [loadingPay, setLoadingPay] = useState(false);
   const [pixData, setPixData] = useState<{code: string, img: string} | null>(null);
+  
+  // ESTADO PARA ALTERNAR ENTRE "VER COMPROVANTES" E "COMPRAR MAIS"
+  const [modoCompra, setModoCompra] = useState(false);
 
   // Efeito para ajustar inputs de nomes conforme quantidade
   useEffect(() => {
@@ -79,9 +82,14 @@ export default function Home() {
     finally { setLoadingPay(false); }
   };
 
-  const meuComprovante = bolao?.participantes?.find((p: any) => p.usuarioId === user?.id && p.status === 'pago');
+  // --- FILTROS DE DADOS ---
+  // Busca TODAS as compras pagas deste usuário (não apenas uma)
+  const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
   
-  // Filtra apenas quem tem status 'pago' para exibir na lista pública
+  // Calcula total de cotas que o usuário já tem
+  const totalMinhasCotas = minhasCompras.reduce((acc: number, p: any) => acc + p.quantidade, 0);
+
+  // Lista pública de todos que pagaram
   const participantesConfirmados = bolao?.participantes?.filter((p: any) => p.status === 'pago') || [];
 
   // --- RENDER ---
@@ -169,56 +177,78 @@ export default function Home() {
               </div>
             </div>
 
-            {/* AREA DE COMPROVANTE OU COMPRA */}
-            {meuComprovante ? (
-               // SE JÁ PAGOU: COMPROVANTE
-               <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl text-center space-y-4 animate-fadeIn">
-                 <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto text-black shadow-lg shadow-yellow-500/20">
-                   <Ticket size={32} />
-                 </div>
-                 <div>
-                   <h3 className="text-xl font-bold text-yellow-400">Pagamento Confirmado!</h3>
-                   <p className="text-sm text-gray-300">Você já está participando.</p>
-                 </div>
-                 <div className="bg-black/40 p-4 rounded-xl text-left text-sm space-y-2 font-mono">
-                   <p><span className="text-gray-500">Autenticação:</span> <span className="text-yellow-100 break-all">{meuComprovante.id}</span></p>
-                   <p><span className="text-gray-500">Cotas:</span> <span className="text-white">{meuComprovante.quantidade}</span></p>
-                   <div className="border-t border-white/10 pt-2 mt-2">
-                     <span className="text-gray-500 block mb-1">Nomes nos jogos:</span>
-                     {meuComprovante.nomesCotas.map((n: string, i:number) => (
-                       <span key={i} className="inline-block bg-yellow-900/40 text-yellow-200 px-2 py-1 rounded mr-2 mb-1 text-xs border border-yellow-700/50">{n}</span>
-                     ))}
+            {/* ÁREA DE COMPRA OU COMPROVANTE */}
+            {minhasCompras.length > 0 && !modoCompra ? (
+               // --- MODO: VISUALIZAR MEUS COMPROVANTES (Carteira) ---
+               <div className="space-y-4 animate-fadeIn">
+                 
+                 {/* Resumo */}
+                 <div className="bg-gradient-to-r from-yellow-500/20 to-yellow-600/10 border border-yellow-500/50 p-6 rounded-2xl text-center space-y-2">
+                   <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center mx-auto text-black shadow-lg">
+                     <Ticket size={24} />
                    </div>
+                   <h3 className="text-xl font-bold text-yellow-400">Você está no jogo!</h3>
+                   <p className="text-gray-300">Você garantiu um total de <strong className="text-white">{totalMinhasCotas} cotas</strong>.</p>
+                   
+                   <button onClick={() => setModoCompra(true)} className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold w-full shadow-lg flex items-center justify-center gap-2 transition">
+                     <PlusCircle size={20}/> Comprar Mais Cotas
+                   </button>
+                 </div>
+
+                 {/* Lista de Recibos */}
+                 <h4 className="text-sm text-gray-400 ml-1 font-bold uppercase">Seus Recibos ({minhasCompras.length})</h4>
+                 <div className="space-y-3">
+                   {minhasCompras.map((compra: any, idx: number) => (
+                     <div key={compra.id} className="bg-gray-900 p-4 rounded-xl border border-gray-800">
+                       <div className="flex justify-between items-start mb-2">
+                         <span className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">#{idx + 1} - {compra.id.split('-')[0]}</span>
+                         <span className="text-emerald-400 font-bold text-sm">{formatMoeda(compra.valorTotal)}</span>
+                       </div>
+                       <div className="text-sm text-gray-300">
+                         <p><strong>{compra.quantidade} cota(s):</strong></p>
+                         <div className="flex flex-wrap gap-1 mt-1">
+                           {compra.nomesCotas.map((n: string, i:number) => (
+                             <span key={i} className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700">{n}</span>
+                           ))}
+                         </div>
+                       </div>
+                     </div>
+                   ))}
                  </div>
                </div>
             ) : (
-              // SE NÃO PAGOU: VERIFICA STATUS
+              // --- MODO: COMPRAR (Formulário) ---
+              // Lógica: Se não tem compras OU se clicou em "Comprar Mais"
               !bolao.aberto ? (
-                // --- AVISO DE ENCERRADO ---
-                <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl">
-                  <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4">
-                    <LogOut size={32} />
-                  </div>
+                <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl animate-fadeIn">
+                  <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4"><LogOut size={32} /></div>
                   <h3 className="text-2xl font-bold text-red-400 mb-2">Apostas Encerradas</h3>
-                  <p className="text-gray-400">O admin já fechou este bolão para registrar os jogos na lotérica.</p>
-                  <div className="mt-6 p-4 bg-black/30 rounded-xl text-sm text-gray-500">
-                    Fique de olho no grupo para o resultado do sorteio!
-                  </div>
+                  <p className="text-gray-400">O admin já fechou este bolão.</p>
+                  {minhasCompras.length > 0 && (
+                    <button onClick={() => setModoCompra(false)} className="mt-6 text-sm underline text-gray-400 hover:text-white">Ver meus comprovantes</button>
+                  )}
                 </div>
               ) : (
-                // --- FORMULÁRIO DE COMPRA (ABERTO) ---
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl animate-fadeIn">
+                   
+                   {/* Botão de Voltar se já tiver compras */}
+                   {minhasCompras.length > 0 && !pixData && (
+                     <button onClick={() => setModoCompra(false)} className="mb-4 flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
+                       <ArrowLeft size={16}/> Voltar para meus recibos
+                     </button>
+                   )}
+
                    {pixData ? (
                      <div className="text-center space-y-4">
                        <h3 className="text-white font-bold">Escaneie para Pagar</h3>
                        <div className="bg-white p-2 rounded-xl inline-block">
                           <img src={`data:image/png;base64,${pixData.img}`} className="w-48 h-48" />
                        </div>
-                       <p className="text-xs text-gray-400 max-w-xs mx-auto">Após o pagamento, o sistema identificará automaticamente em alguns segundos.</p>
+                       <p className="text-xs text-gray-400 max-w-xs mx-auto">Após o pagamento, aguarde alguns segundos.</p>
                        <button onClick={() => {navigator.clipboard.writeText(pixData.code); alert('Copiado!')}} className="w-full bg-blue-600 py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2">
                          <Copy size={16}/> Copiar Código PIX
                        </button>
-                       <button onClick={() => setPixData(null)} className="text-gray-500 text-xs underline">Voltar</button>
+                       <button onClick={() => setPixData(null)} className="text-gray-500 text-xs underline">Voltar / Cancelar</button>
                      </div>
                    ) : (
                      <div className="space-y-4">
@@ -262,12 +292,12 @@ export default function Home() {
               )
             )}
 
-            {/* LISTA DE PARTICIPANTES */}
+            {/* LISTA DE PARTICIPANTES (PÚBLICA) */}
             <div className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden">
                <div className="p-4 bg-gray-800/50 flex justify-between items-center">
                  <h3 className="font-bold flex items-center gap-2"><Users size={18} className="text-emerald-500"/> Galera Confirmada</h3>
                  <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded-full border border-emerald-500/20">
-                   {participantesConfirmados.length} Pagos
+                   {participantesConfirmados.length} Pagamentos
                  </span>
                </div>
                <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
