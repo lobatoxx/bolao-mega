@@ -5,9 +5,14 @@ import useSWR from 'swr';
 import { Lock, Save, List, Database, Plus, PlayCircle, Award, LayoutDashboard, Home as HomeIcon, Edit, Trash2, X, Ticket, CheckSquare, Unlock, Eraser } from 'lucide-react';
 import Link from 'next/link';
 
-// FORMATADORES
+// --- FORMATADORES (CORRIGIDO DATA 1969) ---
 const formatMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-const formatDate = (data: string) => new Date(data).toLocaleDateString('pt-BR');
+// Se a data vier nula, vazia ou inválida, retorna tracinho em vez de 1969
+const formatDate = (data: string | null) => {
+  if (!data) return '-';
+  const dateObj = new Date(data);
+  return isNaN(dateObj.getTime()) ? '-' : dateObj.toLocaleDateString('pt-BR');
+};
 const formatDateInput = (data: string) => new Date(data).toISOString().split('T')[0];
 
 const fetcher = (url: string) => axios.get(url).then(res => res.data);
@@ -30,11 +35,9 @@ export default function AdminPage() {
   const [novoValorCota, setNovoValorCota] = useState('');
   const [apostasValendo, setApostasValendo] = useState<any[]>([]);
 
-  // --- ESTADOS: CATÁLOGO (NOVA LÓGICA DE GRID) ---
+  // --- ESTADOS: CATÁLOGO (GRID 01-60) ---
   const [nomeJogo, setNomeJogo] = useState('');
-  // Substituímos o input de texto por um array de números selecionados
   const [novosNumerosSelecionados, setNovosNumerosSelecionados] = useState<number[]>([]); 
-  
   const [listaJogos, setListaJogos] = useState<any[]>([]);
   const [jogosSelecionados, setJogosSelecionados] = useState<string[]>([]);
 
@@ -98,6 +101,7 @@ export default function AdminPage() {
 
   const handleEditClick = () => { if(!bolao) return; setEditMode(true); setNovoConcurso(bolao.concurso); setNovoData(formatDateInput(bolao.dataSorteio)); setNovoPremio(bolao.premioEstimado); setNovoValorCota(bolao.valorCota); };
   const handleCancelEdit = () => { setEditMode(false); };
+  
   const handleSalvarBolao = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -112,12 +116,14 @@ export default function AdminPage() {
       mutate();
     } catch (err: any) { alert(err.response?.data?.error); }
   };
+  
   const handleExcluirBolao = async () => { if (!confirm('TEM CERTEZA?')) return; await axios.delete('/api/bolao', { data: { id: bolao.id, adminPassword: password } }); mutate(); };
+  
   const excluirApostaDoBolao = async (id: string) => { if(!confirm('Remover jogo?')) return; await axios.post('/api/admin', { action: 'excluir_aposta', id, adminPassword: password }); carregarApostasValendo(); };
 
 
   // ==========================================
-  // 3. LÓGICA DO CATÁLOGO (AGORA COM GRID)
+  // 3. LÓGICA DO CATÁLOGO (GRID 01-60)
   // ==========================================
   const carregarCatalogo = async () => {
     const res = await axios.post('/api/admin', { action: 'listar_catalogo', adminPassword: password });
@@ -129,47 +135,57 @@ export default function AdminPage() {
   // Função para marcar/desmarcar números no Grid
   const toggleNumeroGrid = (numero: number) => {
     if (novosNumerosSelecionados.includes(numero)) {
-      // Se já tem, remove
       setNovosNumerosSelecionados(prev => prev.filter(n => n !== numero));
     } else {
-      // Se não tem, verifica limite
-      if (novosNumerosSelecionados.length >= 6) {
-        return alert('Máximo de 6 dezenas por jogo!');
-      }
+      if (novosNumerosSelecionados.length >= 6) return alert('Máximo de 6 dezenas por jogo!');
       setNovosNumerosSelecionados(prev => [...prev, numero]);
     }
   };
 
   const salvarJogo = async () => {
-    // Ordena os números antes de salvar
     const nums = [...novosNumerosSelecionados].sort((a,b) => a-b);
-    
     if(nums.length < 6) return alert('Selecione 6 números no volante!');
     
     await axios.post('/api/admin', { 
       action: 'salvar_catalogo', 
-      nome: nomeJogo || `Jogo ${listaJogos.length + 1}`, // Nome automático se vazio
+      nome: nomeJogo || `Jogo ${listaJogos.length + 1}`,
       numeros: nums, 
       adminPassword: password 
     });
     
     alert('Jogo Salvo!');
-    setNovosNumerosSelecionados([]); // Limpa o grid
+    setNovosNumerosSelecionados([]);
     setNomeJogo('');
     carregarCatalogo();
   };
 
   const excluirDoCatalogo = async (id: string) => { if(confirm('Apagar?')) { await axios.post('/api/admin', { action: 'excluir_catalogo', id, adminPassword: password }); carregarCatalogo(); } }
-  const toggleSelecao = (id: string) => { if (jogosSelecionados.includes(id)) setJogosSelecionados(jogosSelecionados.filter(i => i !== id)); else setJogosSelecionados([...jogosSelecionados, id]); };
-  const jogarSelecionados = async () => { if(!bolao) return alert('Sem bolão ativo'); if(jogosSelecionados.length === 0) return alert('Selecione jogos'); if(!confirm(`Importar ${jogosSelecionados.length} jogos?`)) return; await axios.post('/api/admin', { action: 'vincular_jogos', bolaoId: bolao.id, jogosIds: jogosSelecionados, adminPassword: password }); alert('Vinculados!'); setJogosSelecionados([]); };
+  
+  const toggleSelecao = (id: string) => { 
+    if (jogosSelecionados.includes(id)) setJogosSelecionados(jogosSelecionados.filter(i => i !== id)); 
+    else setJogosSelecionados([...jogosSelecionados, id]); 
+  };
+  
+  const jogarSelecionados = async () => { 
+    if(!bolao) return alert('Sem bolão ativo'); 
+    if(jogosSelecionados.length === 0) return alert('Selecione jogos'); 
+    if(!confirm(`Importar ${jogosSelecionados.length} jogos?`)) return; 
+    await axios.post('/api/admin', { action: 'vincular_jogos', bolaoId: bolao.id, jogosIds: jogosSelecionados, adminPassword: password }); 
+    alert('Vinculados!'); setJogosSelecionados([]); 
+  };
 
   // ==========================================
   // 4. LÓGICA CONFERIDOR
   // ==========================================
-  const conferir = async () => { if(!bolao) return; const nums = resultadoStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)); const res = await axios.post('/api/admin', { action: 'conferir', bolaoId: bolao.id, numerosSorteados: nums, adminPassword: password }); setRelatorio(res.data); };
+  const conferir = async () => { 
+    if(!bolao) return; 
+    const nums = resultadoStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)); 
+    const res = await axios.post('/api/admin', { action: 'conferir', bolaoId: bolao.id, numerosSorteados: nums, adminPassword: password }); 
+    setRelatorio(res.data); 
+  };
 
 
-  // --- RENDER ---
+  // --- TELA DE LOGIN ---
   if (!isLogged) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
@@ -184,9 +200,12 @@ export default function AdminPage() {
     );
   }
 
+  // --- RENDERIZAÇÃO PRINCIPAL ---
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans flex flex-col md:flex-row">
       <Head><title>Admin - Bolão</title></Head>
+      
+      {/* SIDEBAR */}
       <aside className="w-full md:w-64 bg-gray-900 border-b md:border-r border-gray-800 shrink-0">
         <div className="p-6 border-b border-gray-800 hidden md:block"><h2 className="font-bold text-xl flex items-center gap-2"><LayoutDashboard/> Admin</h2></div>
         <nav className="p-4 space-y-2 flex md:block overflow-x-auto">
@@ -197,14 +216,17 @@ export default function AdminPage() {
         </nav>
       </aside>
 
+      {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-8">
           <h1 className="text-2xl md:text-3xl font-bold">{tab === 'dashboard' ? 'Gestão do Bolão' : tab === 'catalogo' ? 'Jogos Salvos' : 'Conferidor'}</h1>
           {bolao && <span className={`px-4 py-1 rounded-full text-xs md:text-sm border font-bold ${bolao.aberto ? 'bg-emerald-900 text-emerald-300 border-emerald-500/30' : 'bg-red-900 text-red-300 border-red-500/30'}`}>{bolao.aberto ? 'APOSTAS ABERTAS' : 'APOSTAS ENCERRADAS'}</span>}
         </header>
 
+        {/* --- ABA DASHBOARD --- */}
         {tab === 'dashboard' && (
           <div className="space-y-6 animate-fadeIn">
+            {/* FORMULÁRIO DE BOLÃO */}
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold flex items-center gap-2 text-white">{editMode ? 'Editando' : 'Novo Bolão'}</h3>
@@ -221,6 +243,7 @@ export default function AdminPage() {
               <button onClick={handleSalvarBolao} className="w-full mt-4 py-3 rounded font-bold bg-blue-600 hover:bg-blue-500"><Save size={18} className="inline mr-2"/> Salvar</button>
             </div>
 
+            {/* CARD DO BOLÃO ATUAL */}
             {bolao && (
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl border border-gray-700 relative">
                 <div className="flex justify-between items-start">
@@ -243,6 +266,7 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* LISTA DE JOGOS IMPORTADOS */}
             <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
                 <h3 className="font-bold flex items-center gap-2 mb-4"><Ticket className="text-emerald-500"/> Jogos Valendo ({apostasValendo.length})</h3>
                 <div className="max-h-80 overflow-y-auto space-y-2">
@@ -260,20 +284,17 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* --- ABA CATÁLOGO COM GRID 01-60 --- */}
+        {/* --- ABA CATÁLOGO (GRID 01-60) --- */}
         {tab === 'catalogo' && (
           <div className="space-y-6 animate-fadeIn">
-            
-            {/* VOLANTE DE SELEÇÃO */}
             <div className="bg-gray-800 p-4 md:p-6 rounded-xl border border-gray-700">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-emerald-400"><Plus/> Novo Volante</h3>
-              
               <div className="mb-4 flex gap-2">
                  <input type="text" placeholder="Nome do Jogo (ex: Jogo da Sorte)" value={nomeJogo} onChange={e => setNomeJogo(e.target.value)} className="p-3 bg-gray-900 rounded border border-gray-600 w-full outline-none focus:border-emerald-500" />
                  <button onClick={() => setNovosNumerosSelecionados([])} className="bg-gray-700 px-4 rounded text-gray-300 hover:text-white" title="Limpar"><Eraser size={20}/></button>
               </div>
 
-              {/* GRID DE NÚMEROS */}
+              {/* GRID 1-60 */}
               <div className="grid grid-cols-6 sm:grid-cols-10 gap-2 mb-4">
                  {Array.from({length: 60}, (_, i) => i + 1).map((n) => (
                    <button
@@ -298,7 +319,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* LISTA DE JOGOS */}
             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
               <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                 <h3 className="text-xl font-bold flex items-center gap-2"><Database/> Meus Jogos ({listaJogos.length})</h3>
@@ -336,6 +356,7 @@ export default function AdminPage() {
           </div>
         )}
         
+        {/* --- ABA CONFERIDOR --- */}
         {tab === 'conferidor' && (
           <div className="space-y-6 animate-fadeIn">
              <div className="bg-gray-800 p-6 rounded-xl border border-emerald-500/30">
