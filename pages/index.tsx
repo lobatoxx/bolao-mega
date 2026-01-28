@@ -80,7 +80,8 @@ export default function Home() {
   };
 
   const meuComprovante = bolao?.participantes?.find((p: any) => p.usuarioId === user?.id && p.status === 'pago');
-
+  
+  // Filtra apenas quem tem status 'pago' para exibir na lista pública
   const participantesConfirmados = bolao?.participantes?.filter((p: any) => p.status === 'pago') || [];
 
   // --- RENDER ---
@@ -190,74 +191,74 @@ export default function Home() {
                  </div>
                </div>
             ) : (
-              {/* SE NÃO PAGOU: COMPRA */}
-            {!bolao.aberto ? (
-               // AVISO DE ENCERRADO
-               <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl">
-                 <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4">
-                   <LogOut size={32} />
-                 </div>
-                 <h3 className="text-2xl font-bold text-red-400 mb-2">Apostas Encerradas</h3>
-                 <p className="text-gray-400">O admin já fechou este bolão para registrar os jogos na lotérica.</p>
-                 <div className="mt-6 p-4 bg-black/30 rounded-xl text-sm text-gray-500">
-                   Fique de olho no grupo para o resultado do sorteio!
-                 </div>
-               </div>
-            ) : (
-              // FORMULÁRIO DE COMPRA (Só aparece se aberto for true)
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
-                 {pixData ? (
-                   // ... (código do QR Code igual ao anterior)
-                   <div className="text-center space-y-4">
-                     {/* ... Mantenha o código do QR Code que já estava aqui ... */}
-                     <h3 className="text-white font-bold">Escaneie para Pagar</h3>
-                     <div className="bg-white p-2 rounded-xl inline-block">
-                        <img src={`data:image/png;base64,${pixData.img}`} className="w-48 h-48" />
-                     </div>
-                     <button onClick={() => {navigator.clipboard.writeText(pixData.code); alert('Copiado!')}} className="w-full bg-blue-600 py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2">
-                       <Copy size={16}/> Copiar Código PIX
-                     </button>
-                     <button onClick={() => setPixData(null)} className="text-gray-500 text-xs underline">Voltar</button>
-                   </div>
-                 ) : (
-                   <div className="space-y-4">
-                     <div className="flex justify-between items-end border-b border-gray-800 pb-4">
-                       <div>
-                         <p className="text-gray-400 text-sm">Valor por Cota</p>
-                         <p className="text-2xl font-bold text-white">{formatMoeda(bolao.valorCota)}</p>
+              // SE NÃO PAGOU: VERIFICA SE ESTÁ ABERTO OU FECHADO
+              !bolao.aberto ? (
+                // --- AVISO DE ENCERRADO ---
+                <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl">
+                  <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4">
+                    <LogOut size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-red-400 mb-2">Apostas Encerradas</h3>
+                  <p className="text-gray-400">O admin já fechou este bolão para registrar os jogos na lotérica.</p>
+                  <div className="mt-6 p-4 bg-black/30 rounded-xl text-sm text-gray-500">
+                    Fique de olho no grupo para o resultado do sorteio!
+                  </div>
+                </div>
+              ) : (
+                // --- FORMULÁRIO DE COMPRA (ABERTO) ---
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
+                   {pixData ? (
+                     <div className="text-center space-y-4">
+                       <h3 className="text-white font-bold">Escaneie para Pagar</h3>
+                       <div className="bg-white p-2 rounded-xl inline-block">
+                          <img src={`data:image/png;base64,${pixData.img}`} className="w-48 h-48" />
                        </div>
-                       <div className="text-right">
-                         <label className="text-xs text-gray-400 block mb-1">Quantidade</label>
-                         <input type="number" min="1" max="10" className="w-16 bg-gray-800 text-center border border-gray-600 rounded p-1 text-white font-bold" value={cotasQtd} onChange={e => setCotasQtd(Number(e.target.value))} />
+                       <p className="text-xs text-gray-400 max-w-xs mx-auto">Após o pagamento, o sistema identificará automaticamente em alguns segundos.</p>
+                       <button onClick={() => {navigator.clipboard.writeText(pixData.code); alert('Copiado!')}} className="w-full bg-blue-600 py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2">
+                         <Copy size={16}/> Copiar Código PIX
+                       </button>
+                       <button onClick={() => setPixData(null)} className="text-gray-500 text-xs underline">Voltar</button>
+                     </div>
+                   ) : (
+                     <div className="space-y-4">
+                       <div className="flex justify-between items-end border-b border-gray-800 pb-4">
+                         <div>
+                           <p className="text-gray-400 text-sm">Valor por Cota</p>
+                           <p className="text-2xl font-bold text-white">{formatMoeda(bolao.valorCota)}</p>
+                         </div>
+                         <div className="text-right">
+                           <label className="text-xs text-gray-400 block mb-1">Quantidade</label>
+                           <input type="number" min="1" max="10" className="w-16 bg-gray-800 text-center border border-gray-600 rounded p-1 text-white font-bold" value={cotasQtd} onChange={e => setCotasQtd(Number(e.target.value))} />
+                         </div>
                        </div>
-                     </div>
-                     
-                     <div className="space-y-2">
-                       <p className="text-xs text-gray-400">Nome para cada cota:</p>
-                       {nomesCotas.map((nome, index) => (
-                         <input key={index} type="text" placeholder={`Nome da Cota ${index + 1}`} 
-                           className="w-full bg-gray-800 border border-gray-700 rounded p-3 text-sm focus:border-emerald-500 outline-none"
-                           value={nome}
-                           onChange={e => {
-                             const novos = [...nomesCotas];
-                             novos[index] = e.target.value;
-                             setNomesCotas(novos);
-                           }}
-                         />
-                       ))}
-                     </div>
+                       
+                       <div className="space-y-2">
+                         <p className="text-xs text-gray-400">Nome para cada cota:</p>
+                         {nomesCotas.map((nome, index) => (
+                           <input key={index} type="text" placeholder={`Nome da Cota ${index + 1}`} 
+                             className="w-full bg-gray-800 border border-gray-700 rounded p-3 text-sm focus:border-emerald-500 outline-none"
+                             value={nome}
+                             onChange={e => {
+                               const novos = [...nomesCotas];
+                               novos[index] = e.target.value;
+                               setNomesCotas(novos);
+                             }}
+                           />
+                         ))}
+                       </div>
 
-                     <div className="flex justify-between items-center pt-2">
-                       <span className="text-gray-400">Total a Pagar:</span>
-                       <span className="text-2xl font-bold text-emerald-400">{formatMoeda(bolao.valorCota * cotasQtd)}</span>
+                       <div className="flex justify-between items-center pt-2">
+                         <span className="text-gray-400">Total a Pagar:</span>
+                         <span className="text-2xl font-bold text-emerald-400">{formatMoeda(bolao.valorCota * cotasQtd)}</span>
+                       </div>
+                       
+                       <button onClick={handleComprar} disabled={loadingPay} className="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg shadow-lg shadow-emerald-900/50 transition transform active:scale-95 flex items-center justify-center gap-2">
+                          {loadingPay ? <RefreshCw className="animate-spin"/> : <><QrCode/> Gerar PIX Agora</>}
+                       </button>
                      </div>
-                     
-                     <button onClick={handleComprar} disabled={loadingPay} className="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg shadow-lg shadow-emerald-900/50 transition transform active:scale-95 flex items-center justify-center gap-2">
-                        {loadingPay ? <RefreshCw className="animate-spin"/> : <><QrCode/> Gerar PIX Agora</>}
-                     </button>
-                   </div>
-                 )}
-              </div>
+                   )}
+                </div>
+              )
             )}
 
             {/* LISTA DE PARTICIPANTES */}
@@ -265,12 +266,11 @@ export default function Home() {
                <div className="p-4 bg-gray-800/50 flex justify-between items-center">
                  <h3 className="font-bold flex items-center gap-2"><Users size={18} className="text-emerald-500"/> Galera Confirmada</h3>
                  <span className="bg-emerald-900/50 text-emerald-400 text-xs px-2 py-1 rounded-full border border-emerald-500/20">
-                   {participantesConfirmados.length} Pagos  {/* <-- USANDO A VARIÁVEL FILTRADA */}
+                   {participantesConfirmados.length} Pagos
                  </span>
                </div>
-               
                <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
-                 {participantesConfirmados.map((p: any) => (  // <-- USANDO A VARIÁVEL FILTRADA
+                 {participantesConfirmados.map((p: any) => (
                    <div key={p.id} className="p-4 flex justify-between items-center hover:bg-white/5 transition">
                      <div className="flex items-center gap-3">
                        <div className="bg-emerald-500/10 p-2 rounded-full">
@@ -289,7 +289,6 @@ export default function Home() {
                      </div>
                    </div>
                  ))}
-                 
                  {participantesConfirmados.length === 0 && (
                    <p className="text-center p-6 text-gray-600 text-sm">Ninguém pagou ainda. Seja o primeiro!</p>
                  )}
