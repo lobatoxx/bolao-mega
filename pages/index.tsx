@@ -42,6 +42,28 @@ export default function Home() {
     setNomesCotas(novosNomes);
   }, [cotasQtd, user]);
 
+  // ... outros useEffects ...
+
+  // [NOVO] MONITOR DE PAGAMENTO APROVADO
+  // Se eu estiver vendo um QR Code e o número de compras pagas aumentar,
+  // significa que meu pagamento caiu. Então fecho o QR Code.
+  const [totalComprasAnterior, setTotalComprasAnterior] = useState(0);
+  
+  // Filtros (já existem no seu código, certifique-se que estão antes desse useEffect)
+  const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
+  
+  useEffect(() => {
+    // Se o número de compras aumentou (pagamento confirmado)
+    if (minhasCompras.length > totalComprasAnterior) {
+      if (pixData) {
+        setPixData(null);    // Fecha o QR Code
+        setModoCompra(false); // Volta para a lista de recibos
+        alert("🎉 Pagamento Confirmado! Boa sorte!");
+      }
+      setTotalComprasAnterior(minhasCompras.length);
+    }
+  }, [minhasCompras, pixData, totalComprasAnterior]);
+
   // --- FUNÇÕES DE AUTH ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
