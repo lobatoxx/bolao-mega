@@ -190,15 +190,30 @@ export default function Home() {
                  </div>
                </div>
             ) : (
-              /* SE NÃO PAGOU: COMPRA */
+              {/* SE NÃO PAGOU: COMPRA */}
+            {!bolao.aberto ? (
+               // AVISO DE ENCERRADO
+               <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl">
+                 <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4">
+                   <LogOut size={32} />
+                 </div>
+                 <h3 className="text-2xl font-bold text-red-400 mb-2">Apostas Encerradas</h3>
+                 <p className="text-gray-400">O admin já fechou este bolão para registrar os jogos na lotérica.</p>
+                 <div className="mt-6 p-4 bg-black/30 rounded-xl text-sm text-gray-500">
+                   Fique de olho no grupo para o resultado do sorteio!
+                 </div>
+               </div>
+            ) : (
+              // FORMULÁRIO DE COMPRA (Só aparece se aberto for true)
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
                  {pixData ? (
+                   // ... (código do QR Code igual ao anterior)
                    <div className="text-center space-y-4">
+                     {/* ... Mantenha o código do QR Code que já estava aqui ... */}
                      <h3 className="text-white font-bold">Escaneie para Pagar</h3>
                      <div className="bg-white p-2 rounded-xl inline-block">
                         <img src={`data:image/png;base64,${pixData.img}`} className="w-48 h-48" />
                      </div>
-                     <p className="text-xs text-gray-400 max-w-xs mx-auto">Após o pagamento, o sistema identificará automaticamente em alguns segundos.</p>
                      <button onClick={() => {navigator.clipboard.writeText(pixData.code); alert('Copiado!')}} className="w-full bg-blue-600 py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2">
                        <Copy size={16}/> Copiar Código PIX
                      </button>

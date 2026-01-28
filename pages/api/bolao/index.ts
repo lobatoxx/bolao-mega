@@ -26,7 +26,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Senha de Admin incorreta!' });
     }
 
-    // Desativa anteriores
     await prisma.bolao.updateMany({ where: { ativo: true }, data: { ativo: false } });
 
     const novoBolao = await prisma.bolao.create({
@@ -35,15 +34,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         premioEstimado: parseFloat(premioEstimado),
         valorCota: parseFloat(valorCota),
         dataSorteio: new Date(dataSorteio),
+        aberto: true // Nasce aberto
       }
     });
 
     return res.status(201).json(novoBolao);
   }
 
-  // --- EDITAR (PUT) ---
+  // --- EDITAR / ENCERRAR (PUT) ---
   if (req.method === 'PUT') {
-    const { id, concurso, premioEstimado, valorCota, dataSorteio, adminPassword } = req.body;
+    // Agora aceita o campo "aberto" também
+    const { id, concurso, premioEstimado, valorCota, dataSorteio, aberto, adminPassword } = req.body;
 
     if (adminPassword !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ error: 'Senha de Admin incorreta!' });
@@ -57,6 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           premioEstimado: parseFloat(premioEstimado),
           valorCota: parseFloat(valorCota),
           dataSorteio: new Date(dataSorteio),
+          aberto: aberto // Atualiza o status
         }
       });
       return res.status(200).json(bolaoAtualizado);
@@ -74,19 +76,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      // 1. Primeiro deleta os participantes desse bolão (Limpeza)
-      await prisma.participante.deleteMany({
-        where: { bolaoId: id }
-      });
-
-      // 2. Depois deleta o bolão
-      await prisma.bolao.delete({
-        where: { id }
-      });
-
+      await prisma.participante.deleteMany({ where: { bolaoId: id } });
+      await prisma.bolao.delete({ where: { id } });
       return res.status(200).json({ message: 'Bolão excluído com sucesso' });
     } catch (error) {
-      console.error(error);
       return res.status(500).json({ error: 'Erro ao excluir bolão' });
     }
   }

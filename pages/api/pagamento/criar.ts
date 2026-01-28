@@ -16,7 +16,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     if (!bolao || !usuario) return res.status(404).json({ error: 'Dados inválidos' });
 
+    // --- BLOQUEIO DE SEGURANÇA ---
+    if (!bolao.aberto) {
+      return res.status(400).json({ error: 'As apostas para este bolão já foram encerradas!' });
+    }
+    // -----------------------------
+
     const total = bolao.valorCota * quantidade;
+    // ... resto do código
 
     // Cria participante vinculado ao usuário
     const participante = await prisma.participante.create({

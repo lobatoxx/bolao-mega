@@ -23,11 +23,12 @@ model Bolao {
   premioEstimado Float
   valorCota      Float
   dataCriacao    DateTime       @default(now())
-  ativo          Boolean        @default(true)
-  resultado      String?        // Ex: "01,02,03,04,05,06" (Preenchido após sorteio)
+  ativo          Boolean        @default(true) // Define qual é o bolão atual da tela
+  aberto         Boolean        @default(true) // NOVA: Define se aceita pagamentos
+  resultado      String?
   
   participantes  Participante[]
-  apostas        ApostaRealizada[] // Jogos que valeram neste bolão
+  apostas        ApostaRealizada[]
 }
 
 model Participante {
