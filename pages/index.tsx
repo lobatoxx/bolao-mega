@@ -31,7 +31,37 @@ export default function Home() {
   // ESTADO PARA ALTERNAR ENTRE "VER COMPROVANTES" E "COMPRAR MAIS"
   const [modoCompra, setModoCompra] = useState(false);
 
-  // Efeito para ajustar inputs de nomes conforme quantidade
+  // ESTADO PARA MONITORAR O TOTAL DE COMPRAS (Para fechar o QR Code automaticamente)
+  const [totalComprasAnterior, setTotalComprasAnterior] = useState(0);
+
+  // --- CÁLCULOS E FILTROS (DEFINIDOS AQUI EM CIMA PARA USAR NOS EFEITOS) ---
+  // 1. Minhas Compras confirmadas
+  const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
+  
+  // 2. Total de cotas que eu tenho
+  const totalMinhasCotas = minhasCompras.reduce((acc: number, p: any) => acc + p.quantidade, 0);
+  
+  // 3. Lista geral de quem pagou
+  const participantesConfirmados = bolao?.participantes?.filter((p: any) => p.status === 'pago') || [];
+
+
+  // --- EFEITOS (USEEFFECT) ---
+
+  // 1. Monitora se caiu um pagamento novo para fechar o QR Code
+  useEffect(() => {
+    // Se o número de compras aumentou em relação ao que tínhamos salvo
+    if (minhasCompras.length > totalComprasAnterior) {
+      if (pixData) {
+        setPixData(null);     // Fecha o QR Code
+        setModoCompra(false); // Volta para a lista de recibos
+        alert("🎉 Pagamento Confirmado! Boa sorte!");
+      }
+      // Atualiza o contador
+      setTotalComprasAnterior(minhasCompras.length);
+    }
+  }, [minhasCompras.length, pixData, totalComprasAnterior]);
+
+  // 2. Ajusta inputs de nomes conforme quantidade
   useEffect(() => {
     const novosNomes = [...nomesCotas];
     if (cotasQtd > novosNomes.length) {
@@ -42,27 +72,6 @@ export default function Home() {
     setNomesCotas(novosNomes);
   }, [cotasQtd, user]);
 
-  // ... outros useEffects ...
-
-  // [NOVO] MONITOR DE PAGAMENTO APROVADO
-  // Se eu estiver vendo um QR Code e o número de compras pagas aumentar,
-  // significa que meu pagamento caiu. Então fecho o QR Code.
-  const [totalComprasAnterior, setTotalComprasAnterior] = useState(0);
-  
-  // Filtros (já existem no seu código, certifique-se que estão antes desse useEffect)
-  const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
-  
-  useEffect(() => {
-    // Se o número de compras aumentou (pagamento confirmado)
-    if (minhasCompras.length > totalComprasAnterior) {
-      if (pixData) {
-        setPixData(null);    // Fecha o QR Code
-        setModoCompra(false); // Volta para a lista de recibos
-        alert("🎉 Pagamento Confirmado! Boa sorte!");
-      }
-      setTotalComprasAnterior(minhasCompras.length);
-    }
-  }, [minhasCompras, pixData, totalComprasAnterior]);
 
   // --- FUNÇÕES DE AUTH ---
   const handleLogin = async (e: React.FormEvent) => {
@@ -104,10 +113,6 @@ export default function Home() {
     finally { setLoadingPay(false); }
   };
 
-  // --- FILTROS DE DADOS ---
-  const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
-  const totalMinhasCotas = minhasCompras.reduce((acc: number, p: any) => acc + p.quantidade, 0);
-  const participantesConfirmados = bolao?.participantes?.filter((p: any) => p.status === 'pago') || [];
 
   // --- RENDER ---
   
