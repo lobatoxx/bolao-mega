@@ -83,13 +83,8 @@ export default function Home() {
   };
 
   // --- FILTROS DE DADOS ---
-  // Busca TODAS as compras pagas deste usuário (não apenas uma)
   const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
-  
-  // Calcula total de cotas que o usuário já tem
   const totalMinhasCotas = minhasCompras.reduce((acc: number, p: any) => acc + p.quantidade, 0);
-
-  // Lista pública de todos que pagaram
   const participantesConfirmados = bolao?.participantes?.filter((p: any) => p.status === 'pago') || [];
 
   // --- RENDER ---
@@ -190,9 +185,17 @@ export default function Home() {
                    <h3 className="text-xl font-bold text-yellow-400">Você está no jogo!</h3>
                    <p className="text-gray-300">Você garantiu um total de <strong className="text-white">{totalMinhasCotas} cotas</strong>.</p>
                    
-                   <button onClick={() => setModoCompra(true)} className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold w-full shadow-lg flex items-center justify-center gap-2 transition">
-                     <PlusCircle size={20}/> Comprar Mais Cotas
-                   </button>
+                   {/* SÓ MOSTRA O BOTÃO SE O BOLÃO ESTIVER ABERTO */}
+                   {bolao.aberto ? (
+                     <button onClick={() => setModoCompra(true)} className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold w-full shadow-lg flex items-center justify-center gap-2 transition">
+                       <PlusCircle size={20}/> Comprar Mais Cotas
+                     </button>
+                   ) : (
+                     // AVISO SE ESTIVER FECHADO DENTRO DA CARTEIRA
+                     <div className="mt-4 p-2 bg-red-900/30 rounded text-red-300 text-sm border border-red-900/50 font-bold">
+                        🚫 Apostas encerradas para este concurso.
+                     </div>
+                   )}
                  </div>
 
                  {/* Lista de Recibos */}
@@ -220,15 +223,22 @@ export default function Home() {
               // --- MODO: COMPRAR (Formulário) ---
               // Lógica: Se não tem compras OU se clicou em "Comprar Mais"
               !bolao.aberto ? (
+                // TELA DE ENCERRADO
                 <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl animate-fadeIn">
-                  <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4"><LogOut size={32} /></div>
+                  <div className="w-16 h-16 bg-red-900/50 rounded-full flex items-center justify-center mx-auto text-red-200 mb-4">
+                    <LogOut size={32} />
+                  </div>
                   <h3 className="text-2xl font-bold text-red-400 mb-2">Apostas Encerradas</h3>
                   <p className="text-gray-400">O admin já fechou este bolão.</p>
+                  
                   {minhasCompras.length > 0 && (
-                    <button onClick={() => setModoCompra(false)} className="mt-6 text-sm underline text-gray-400 hover:text-white">Ver meus comprovantes</button>
+                    <button onClick={() => setModoCompra(false)} className="mt-6 text-sm underline text-gray-400 hover:text-white">
+                      Ver meus comprovantes
+                    </button>
                   )}
                 </div>
               ) : (
+                // TELA DE COMPRA ABERTA
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl animate-fadeIn">
                    
                    {/* Botão de Voltar se já tiver compras */}
@@ -244,7 +254,7 @@ export default function Home() {
                        <div className="bg-white p-2 rounded-xl inline-block">
                           <img src={`data:image/png;base64,${pixData.img}`} className="w-48 h-48" />
                        </div>
-                       <p className="text-xs text-gray-400 max-w-xs mx-auto">Após o pagamento, aguarde alguns segundos.</p>
+                       <p className="text-xs text-gray-400 max-w-xs mx-auto">Após o pagamento, o sistema identificará automaticamente em alguns segundos.</p>
                        <button onClick={() => {navigator.clipboard.writeText(pixData.code); alert('Copiado!')}} className="w-full bg-blue-600 py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2">
                          <Copy size={16}/> Copiar Código PIX
                        </button>

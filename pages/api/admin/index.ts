@@ -6,13 +6,19 @@ const prisma = new PrismaClient();
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { action, adminPassword } = req.body;
 
-  // SEGURANÇA BÁSICA
+  // --- SEGURANÇA: BARREIRA DE ENTRADA ---
   if (adminPassword !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Acesso negado' });
+    return res.status(401).json({ error: 'Senha incorreta!' });
   }
 
   try {
-    // --- CATÁLOGO ---
+    // 0. VERIFICAÇÃO DE LOGIN (NOVA)
+    // Serve apenas para o frontend saber se a senha está certa antes de liberar a tela
+    if (action === 'check_auth') {
+      return res.status(200).json({ ok: true });
+    }
+
+    // 1. CATÁLOGO: SALVAR NOVO JOGO
     if (action === 'salvar_catalogo') {
       const { nome, numeros } = req.body;
       const jogo = await prisma.catalogoJogos.create({
@@ -21,18 +27,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(jogo);
     }
 
+    // 2. CATÁLOGO: LISTAR JOGOS
     if (action === 'listar_catalogo') {
       const jogos = await prisma.catalogoJogos.findMany({ orderBy: { criadoEm: 'desc' } });
       return res.status(200).json(jogos);
     }
 
+    // 3. CATÁLOGO: EXCLUIR JOGO
     if (action === 'excluir_catalogo') {
        const { id } = req.body;
        await prisma.catalogoJogos.delete({ where: { id } });
        return res.status(200).json({ message: 'Deletado' });
     }
 
-    // --- APOSTAS DO BOLÃO (VÍNCULO) ---
+    // 4. VINCULAR JOGOS DO CATÁLOGO AO BOLÃO ATUAL
     if (action === 'vincular_jogos') {
       const { bolaoId, jogosIds } = req.body; 
       
@@ -40,7 +48,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where: { id: { in: jogosIds } }
       });
 
-      // Cria as apostas reais no bolão
       await prisma.apostaRealizada.createMany({
         data: jogosDoCatalogo.map(j => ({
           bolaoId,
@@ -49,10 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }))
       });
 
-      return res.status(200).json({ message: `${jogosDoCatalogo.length} jogos vinculados!` });
+      return res.status(200).json({ message: 'Vinculados' });
     }
 
-    // NOVA: LISTAR O QUE TÁ VALENDO
+    // 5. LISTAR APOSTAS QUE ESTÃO VALENDO NO BOLÃO
     if (action === 'listar_apostas') {
       const { bolaoId } = req.body;
       const apostas = await prisma.apostaRealizada.findMany({
@@ -62,14 +69,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(apostas);
     }
 
-    // NOVA: EXCLUIR APOSTA DO BOLÃO
+    // 6. EXCLUIR APOSTA DO BOLÃO
     if (action === 'excluir_aposta') {
       const { id } = req.body;
       await prisma.apostaRealizada.delete({ where: { id } });
-      return res.status(200).json({ message: 'Aposta removida do bolão' });
+      return res.status(200).json({ message: 'Removido' });
     }
 
-    // --- CONFERIDOR ---
+    // 7. CONFERIDOR DE RESULTADOS
     if (action === 'conferir') {
       const { bolaoId, numerosSorteados } = req.body; 
 
