@@ -169,8 +169,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* SE JÁ PAGOU: COMPROVANTE */}
+            {/* AREA DE COMPROVANTE OU COMPRA */}
             {meuComprovante ? (
+               // SE JÁ PAGOU: COMPROVANTE
                <div className="bg-yellow-500/10 border border-yellow-500/50 p-6 rounded-2xl text-center space-y-4 animate-fadeIn">
                  <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto text-black shadow-lg shadow-yellow-500/20">
                    <Ticket size={32} />
@@ -191,7 +192,7 @@ export default function Home() {
                  </div>
                </div>
             ) : (
-              // SE NÃO PAGOU: VERIFICA SE ESTÁ ABERTO OU FECHADO
+              // SE NÃO PAGOU: VERIFICA STATUS
               !bolao.aberto ? (
                 // --- AVISO DE ENCERRADO ---
                 <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl">
