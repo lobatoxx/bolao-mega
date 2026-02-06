@@ -1,9 +1,12 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // Ou "sqlite" se estiver usando local, mas na Vercel geralmente é Postgres (Vercel Postgres ou Neon)
   url      = env("DATABASE_URL")
 }
 
@@ -12,55 +15,54 @@ model Usuario {
   nome          String
   cpf           String         @unique
   telefone      String
-  createdAt     DateTime       @default(now())
   participacoes Participante[]
+  criadoEm      DateTime       @default(now())
 }
 
 model Bolao {
-  id             String         @id @default(uuid())
+  id             String            @id @default(uuid())
   concurso       String
   dataSorteio    DateTime
   premioEstimado Float
   valorCota      Float
-  dataCriacao    DateTime       @default(now())
-  ativo          Boolean        @default(true) // Define qual é o bolão atual da tela
-  aberto         Boolean        @default(true) // NOVA: Define se aceita pagamentos
-  resultado      String?
-  
+  aberto         Boolean           @default(true)
   participantes  Participante[]
   apostas        ApostaRealizada[]
+  criadoEm       DateTime          @default(now())
+  atualizadoEm   DateTime          @updatedAt
 }
 
 model Participante {
   id            String    @id @default(uuid())
   bolaoId       String
+  bolao         Bolao     @relation(fields: [bolaoId], references: [id], onDelete: Cascade)
   usuarioId     String
-  nomesCotas    String[]
+  usuario       Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  
+  nomesCotas    String[]  // Array de nomes das cotas
   quantidade    Int
   valorTotal    Float
-  status        String    @default("pendente")
+  
+  status        String    @default("pendente") // pendente, pago
+  metodo        String?   @default("PIX")      // <--- O CAMPO NOVO QUE FALTAVA
+  
   paymentId     String?
   dataPagamento DateTime?
-  createdAt     DateTime  @default(now())
-
-  bolao   Bolao   @relation(fields: [bolaoId], references: [id], onDelete: Cascade)
-  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  criadoEm      DateTime  @default(now())
 }
 
-// SEU BANCO DE DADOS PESSOAL DE JOGOS
-model CatalogoJogos {
-  id        String   @id @default(uuid())
-  nome      String   // Ex: "Jogo da Vó", "Estatística Jan/24"
-  numeros   Int[]    // Array de números: [1, 15, 22, 30, 45, 60]
-  criadoEm  DateTime @default(now())
-}
-
-// JOGOS QUE FORAM EFETIVAMENTE JOGADOS NO BOLÃO
 model ApostaRealizada {
   id        String   @id @default(uuid())
   bolaoId   String
-  numeros   Int[]    // Os números jogados
-  origem    String?  // Ex: "Importado do Catálogo" ou "Gerado Auto"
-  
   bolao     Bolao    @relation(fields: [bolaoId], references: [id], onDelete: Cascade)
+  numeros   Int[]
+  origem    String?
+  criadoEm  DateTime @default(now())
+}
+
+model CatalogoJogos {
+  id        String   @id @default(uuid())
+  nome      String
+  numeros   Int[]
+  criadoEm  DateTime @default(now())
 }

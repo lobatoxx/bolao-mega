@@ -4,59 +4,63 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // --- LISTAR (GET) ---
-  if (req.method === 'GET') {
-    const bolao = await prisma.bolao.findFirst({
-      where: { ativo: true },
-      orderBy: { dataCriacao: 'desc' },
-      include: { 
-        participantes: {
-          include: { usuario: true }
+  const { method } = req;
+
+  try {
+    // GET: Pega o bolão mais recente
+    if (method === 'GET') {
+      const bolao = await prisma.bolao.findFirst({
+        orderBy: { criadoEm: 'desc' },
+        include: {
+          participantes: {
+            include: { usuario: true },
+            orderBy: { dataPagamento: 'desc' }
+          },
+          apostas: true
         }
-      }
-    });
-    return res.status(200).json(bolao);
-  }
-
-  // --- CRIAR (POST) ---
-  if (req.method === 'POST') {
-    const { concurso, premioEstimado, valorCota, dataSorteio, adminPassword } = req.body;
-
-    if (adminPassword !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Senha de Admin incorreta!' });
+      });
+      return res.status(200).json(bolao);
     }
 
-    await prisma.bolao.updateMany({ where: { ativo: true }, data: { ativo: false } });
+    // POST: Cria novo bolão
+    if (method === 'POST') {
+      const { concurso, dataSorteio, premioEstimado, valorCota, adminPassword } = req.body;
 
-    const novoBolao = await prisma.bolao.create({
-      data: {
-        concurso,
-        premioEstimado: parseFloat(premioEstimado),
-        valorCota: parseFloat(valorCota),
-        dataSorteio: new Date(dataSorteio),
-        aberto: true // Nasce aberto
+      if (adminPassword !== process.env.ADMIN_PASSWORD) {
+        return res.status(401).json({ error: 'Senha incorreta' });
       }
-    });
 
-    return res.status(201).json(novoBolao);
-  }
+      // Desativa bolões anteriores
+      await prisma.bolao.updateMany({ data: { aberto: false } });
 
-  // --- EDITAR / ENCERRAR (PUT) ---
-  if (req.method === 'PUT') {
-    // Agora aceita o campo "aberto" também
-    const { id, concurso, premioEstimado, valorCota, dataSorteio, aberto, adminPassword } = req.body;
-
-    if (adminPassword !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Senha de Admin incorreta!' });
+      const novo = await prisma.bolao.create({
+        data: {
+          concurso,
+          dataSorteio: new Date(dataSorteio),
+          premioEstimado: Number(premioEstimado),
+          valorCota: Number(valorCota),
+          aberto: true
+        }
+      });
+      return res.status(201).json(novo);
     }
 
-// TRAVA DE SEGURANÇA (NOVO)
-      if (aberto === false) { // Se estiver tentando fechar
+    // PUT: Atualiza/Fecha bolão
+    if (method === 'PUT') {
+      const { id, concurso, dataSorteio, premioEstimado, valorCota, aberto, adminPassword } = req.body;
+
+      if (adminPassword !== process.env.ADMIN_PASSWORD) {
+        return res.status(401).json({ error: 'Senha incorreta' });
+      }
+
+      // --- TRAVA DE SEGURANÇA (PAGAMENTO EM DINHEIRO) ---
+      // Se estiver tentando FECHAR o bolão (aberto = false)
+      if (aberto === false) {
          const pendencias = await prisma.participante.count({
            where: { 
              bolaoId: id, 
              status: 'pendente',
-             metodo: 'DINHEIRO'
+             metodo: 'DINHEIRO' // Agora isso vai funcionar pois atualizamos o schema
            }
          });
          
@@ -64,40 +68,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
            return res.status(400).json({ error: `Existem ${pendencias} pagamentos em dinheiro aguardando sua aprovação no Telegram! Resolva antes de fechar.` });
          }
       }
+      // ---------------------------------------------------
 
-    try {
-      const bolaoAtualizado = await prisma.bolao.update({
+      const atualizado = await prisma.bolao.update({
         where: { id },
         data: {
           concurso,
-          premioEstimado: parseFloat(premioEstimado),
-          valorCota: parseFloat(valorCota),
           dataSorteio: new Date(dataSorteio),
-          aberto: aberto // Atualiza o status
+          premioEstimado: Number(premioEstimado),
+          valorCota: Number(valorCota),
+          aberto
         }
       });
-      return res.status(200).json(bolaoAtualizado);
-    } catch (error) {
-      return res.status(500).json({ error: 'Erro ao atualizar bolão' });
-    }
-  }
-
-  // --- EXCLUIR (DELETE) ---
-  if (req.method === 'DELETE') {
-    const { id, adminPassword } = req.body;
-
-    if (adminPassword !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Senha de Admin incorreta!' });
+      return res.status(200).json(atualizado);
     }
 
-    try {
-      await prisma.participante.deleteMany({ where: { bolaoId: id } });
+    // DELETE: Apaga bolão
+    if (method === 'DELETE') {
+      const { id, adminPassword } = req.body;
+      if (adminPassword !== process.env.ADMIN_PASSWORD) {
+        return res.status(401).json({ error: 'Senha incorreta' });
+      }
       await prisma.bolao.delete({ where: { id } });
-      return res.status(200).json({ message: 'Bolão excluído com sucesso' });
-    } catch (error) {
-      return res.status(500).json({ error: 'Erro ao excluir bolão' });
+      return res.status(200).json({ message: 'Bolão deletado' });
     }
-  }
 
-  return res.status(405).end();
+    return res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']).status(405).end(`Method ${method} Not Allowed`);
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
 }
