@@ -29,7 +29,7 @@ model Bolao {
   participantes  Participante[]
   apostas        ApostaRealizada[]
   criadoEm       DateTime          @default(now())
-  atualizadoEm   DateTime          @updatedAt
+  atualizadoEm   DateTime          @default(now()) @updatedAt
 }
 
 model Participante {
