@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { bolaoId, usuarioId, nomesCotas, quantidade, metodo } = req.body; // Recebe 'metodo'
+  const { bolaoId, usuarioId, nomesCotas, quantidade, metodo } = req.body; 
 
   try {
     const bolao = await prisma.bolao.findUnique({ where: { id: bolaoId } });
@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         quantidade,
         valorTotal,
         status: 'pendente',
-        metodo: metodo || 'PIX' // Se não vier nada, assume PIX
+        metodo: metodo || 'PIX' 
       },
       include: { usuario: true }
     });
@@ -47,7 +47,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // --- SE FOR PIX (Fluxo Antigo) ---
-    const pixData = await gerarPix(valorTotal, `Bolao-${bolao.concurso}`, participante.usuario.email, participante.id);
+    // CORREÇÃO: Usamos um email genérico pois o usuário não tem email no cadastro
+    const emailPagador = 'participante@bolao.com'; 
+
+    const pixData = await gerarPix(
+        valorTotal, 
+        `Bolao-${bolao.concurso}`, 
+        emailPagador, // Aqui estava o erro (participante.usuario.email)
+        participante.id
+    );
     
     return res.status(200).json({
       tipo: 'PIX',
