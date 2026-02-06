@@ -50,6 +50,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Senha de Admin incorreta!' });
     }
 
+// TRAVA DE SEGURANÇA (NOVO)
+      if (aberto === false) { // Se estiver tentando fechar
+         const pendencias = await prisma.participante.count({
+           where: { 
+             bolaoId: id, 
+             status: 'pendente',
+             metodo: 'DINHEIRO'
+           }
+         });
+         
+         if (pendencias > 0) {
+           return res.status(400).json({ error: `Existem ${pendencias} pagamentos em dinheiro aguardando sua aprovação no Telegram! Resolva antes de fechar.` });
+         }
+      }
+
     try {
       const bolaoAtualizado = await prisma.bolao.update({
         where: { id },

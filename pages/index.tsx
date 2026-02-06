@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import useSWR from 'swr';
 import axios from 'axios';
-import { Copy, RefreshCw, CheckCircle, Users, QrCode, Trophy, Calendar, LogOut, Ticket, PlusCircle, ArrowLeft } from 'lucide-react';
+import { Copy, RefreshCw, CheckCircle, Users, QrCode, Trophy, Calendar, LogOut, Ticket, PlusCircle, ArrowLeft, Banknote } from 'lucide-react';
 
 // FORMATADORES
 const formatMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
@@ -28,13 +28,17 @@ export default function Home() {
   const [loadingPay, setLoadingPay] = useState(false);
   const [pixData, setPixData] = useState<{code: string, img: string} | null>(null);
   
+  // NOVOS ESTADOS PARA PAGAMENTO MANUAL
+  const [metodoPagamento, setMetodoPagamento] = useState<'PIX' | 'DINHEIRO'>('PIX');
+  const [esperandoAprovacao, setEsperandoAprovacao] = useState(false);
+
   // ESTADO PARA ALTERNAR ENTRE "VER COMPROVANTES" E "COMPRAR MAIS"
   const [modoCompra, setModoCompra] = useState(false);
 
-  // ESTADO PARA MONITORAR O TOTAL DE COMPRAS (Para fechar o QR Code automaticamente)
+  // ESTADO PARA MONITORAR O TOTAL DE COMPRAS (Para fechar o QR Code/Aviso automaticamente)
   const [totalComprasAnterior, setTotalComprasAnterior] = useState(0);
 
-  // --- CÁLCULOS E FILTROS (DEFINIDOS AQUI EM CIMA PARA USAR NOS EFEITOS) ---
+  // --- CÁLCULOS E FILTROS ---
   // 1. Minhas Compras confirmadas
   const minhasCompras = bolao?.participantes?.filter((p: any) => p.usuarioId === user?.id && p.status === 'pago') || [];
   
@@ -47,19 +51,27 @@ export default function Home() {
 
   // --- EFEITOS (USEEFFECT) ---
 
-  // 1. Monitora se caiu um pagamento novo para fechar o QR Code
+  // 1. Monitora se caiu um pagamento novo (Seja PIX ou Aprovação do Admin)
   useEffect(() => {
     // Se o número de compras aumentou em relação ao que tínhamos salvo
     if (minhasCompras.length > totalComprasAnterior) {
+      // Se estava na tela de PIX
       if (pixData) {
-        setPixData(null);     // Fecha o QR Code
-        setModoCompra(false); // Volta para a lista de recibos
-        alert("🎉 Pagamento Confirmado! Boa sorte!");
+        setPixData(null);     
+        setModoCompra(false); 
+        alert("🎉 Pagamento via PIX Confirmado! Boa sorte!");
       }
+      // Se estava na tela de "Aguardando Aprovação" (Dinheiro)
+      if (esperandoAprovacao) {
+        setEsperandoAprovacao(false);
+        setModoCompra(false);
+        alert("🎉 Pagamento em Dinheiro CONFIRMADO pelo Admin! Você está no jogo.");
+      }
+      
       // Atualiza o contador
       setTotalComprasAnterior(minhasCompras.length);
     }
-  }, [minhasCompras.length, pixData, totalComprasAnterior]);
+  }, [minhasCompras.length, pixData, esperandoAprovacao, totalComprasAnterior]);
 
   // 2. Ajusta inputs de nomes conforme quantidade
   useEffect(() => {
@@ -97,7 +109,7 @@ export default function Home() {
     finally { setAuthLoading(false); }
   };
 
-  // --- FUNÇÃO PAGAMENTO ---
+  // --- FUNÇÃO PAGAMENTO (ATUALIZADA) ---
   const handleComprar = async () => {
     if (nomesCotas.some(n => n.trim() === '')) return alert('Preencha o nome de todas as cotas.');
     setLoadingPay(true);
@@ -106,10 +118,19 @@ export default function Home() {
         bolaoId: bolao.id,
         usuarioId: user.id,
         nomesCotas: nomesCotas,
-        quantidade: cotasQtd
+        quantidade: cotasQtd,
+        metodo: metodoPagamento // Envia se é PIX ou DINHEIRO
       });
-      setPixData({ code: res.data.qr_code, img: res.data.qr_code_base64 });
-    } catch (err) { alert('Erro ao gerar PIX'); } 
+
+      if (res.data.tipo === 'DINHEIRO') {
+        // Se for dinheiro, mostra tela de espera
+        setEsperandoAprovacao(true);
+      } else {
+        // Se for PIX, mostra o QR Code
+        setPixData({ code: res.data.qr_code, img: res.data.qr_code_base64 });
+      }
+
+    } catch (err) { alert('Erro ao processar compra.'); } 
     finally { setLoadingPay(false); }
   };
 
@@ -247,8 +268,7 @@ export default function Home() {
                  </div>
                </div>
             ) : (
-              // --- MODO: COMPRAR (Formulário) ---
-              // Lógica: Se não tem compras OU se clicou em "Comprar Mais"
+              // --- MODO: COMPRAR (Formulário ou Avisos) ---
               !bolao.aberto ? (
                 // TELA DE ENCERRADO
                 <div className="bg-red-900/20 border border-red-900/50 p-8 rounded-2xl text-center shadow-xl animate-fadeIn">
@@ -265,17 +285,28 @@ export default function Home() {
                   )}
                 </div>
               ) : (
-                // TELA DE COMPRA ABERTA
+                // TELA DE COMPRA (ABERTA)
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl animate-fadeIn">
                    
                    {/* Botão de Voltar se já tiver compras */}
-                   {minhasCompras.length > 0 && !pixData && (
+                   {minhasCompras.length > 0 && !pixData && !esperandoAprovacao && (
                      <button onClick={() => setModoCompra(false)} className="mb-4 flex items-center gap-2 text-sm text-gray-400 hover:text-white transition">
                        <ArrowLeft size={16}/> Voltar para meus recibos
                      </button>
                    )}
 
-                   {pixData ? (
+                   {/* --- ESTADO 1: ESPERANDO APROVAÇÃO (DINHEIRO) --- */}
+                   {esperandoAprovacao ? (
+                     <div className="bg-yellow-500/10 border border-yellow-500/50 p-8 rounded-2xl text-center shadow-xl animate-pulse">
+                        <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mx-auto text-black mb-4 font-bold text-2xl">$</div>
+                        <h3 className="text-2xl font-bold text-yellow-400 mb-2">Aguardando Confirmação</h3>
+                        <p className="text-gray-300 mb-4">Entregue o valor ao <strong>Sr. Alexandre Fernandes</strong>.</p>
+                        <p className="text-xs text-gray-500">Assim que ele confirmar no sistema, sua tela atualizará automaticamente.</p>
+                        <button onClick={() => setEsperandoAprovacao(false)} className="mt-6 text-sm underline text-gray-400 hover:text-white">Cancelar visualização</button>
+                     </div>
+
+                   ) : pixData ? (
+                     // --- ESTADO 2: PAGAMENTO PIX ---
                      <div className="text-center space-y-4">
                        <h3 className="text-white font-bold">Escaneie para Pagar</h3>
                        <div className="bg-white p-2 rounded-xl inline-block">
@@ -287,8 +318,21 @@ export default function Home() {
                        </button>
                        <button onClick={() => setPixData(null)} className="text-gray-500 text-xs underline">Voltar / Cancelar</button>
                      </div>
+
                    ) : (
+                     // --- ESTADO 3: FORMULÁRIO DE COMPRA ---
                      <div className="space-y-4">
+                       
+                       {/* SELETOR DE MÉTODO DE PAGAMENTO */}
+                       <div className="grid grid-cols-2 gap-2 bg-gray-800 p-1 rounded-lg mb-4">
+                          <button onClick={() => setMetodoPagamento('PIX')} className={`py-2 rounded-md font-bold text-xs md:text-sm transition flex items-center justify-center gap-2 ${metodoPagamento === 'PIX' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                            <QrCode size={16}/> PIX (Automático)
+                          </button>
+                          <button onClick={() => setMetodoPagamento('DINHEIRO')} className={`py-2 rounded-md font-bold text-xs md:text-sm transition flex items-center justify-center gap-2 ${metodoPagamento === 'DINHEIRO' ? 'bg-yellow-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                            <Banknote size={16}/> DINHEIRO (Manual)
+                          </button>
+                       </div>
+
                        <div className="flex justify-between items-end border-b border-gray-800 pb-4">
                          <div>
                            <p className="text-gray-400 text-sm">Valor por Cota</p>
@@ -320,8 +364,8 @@ export default function Home() {
                          <span className="text-2xl font-bold text-emerald-400">{formatMoeda(bolao.valorCota * cotasQtd)}</span>
                        </div>
                        
-                       <button onClick={handleComprar} disabled={loadingPay} className="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg shadow-lg shadow-emerald-900/50 transition transform active:scale-95 flex items-center justify-center gap-2">
-                          {loadingPay ? <RefreshCw className="animate-spin"/> : <><QrCode/> Gerar PIX Agora</>}
+                       <button onClick={handleComprar} disabled={loadingPay} className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2 ${metodoPagamento === 'PIX' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/50' : 'bg-yellow-600 hover:bg-yellow-500 shadow-yellow-900/50'}`}>
+                          {loadingPay ? <RefreshCw className="animate-spin"/> : metodoPagamento === 'PIX' ? <><QrCode/> Gerar PIX Agora</> : <><CheckCircle/> Solicitar em Dinheiro</>}
                        </button>
                      </div>
                    )}

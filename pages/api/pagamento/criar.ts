@@ -1,67 +1,63 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
-import { payment } from '../../../lib/mercadopago';
+import { gerarPix } from '../../../lib/mercadopago';
+import { solicitarAprovacaoTelegram } from '../../../lib/telegram';
 
 const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  // Recebe usuarioId e lista de nomes agora
-  const { bolaoId, usuarioId, nomesCotas, quantidade } = req.body;
+  const { bolaoId, usuarioId, nomesCotas, quantidade, metodo } = req.body; // Recebe 'metodo'
 
   try {
     const bolao = await prisma.bolao.findUnique({ where: { id: bolaoId } });
-    const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
-    
-    if (!bolao || !usuario) return res.status(404).json({ error: 'Dados inválidos' });
+    if (!bolao) return res.status(404).json({ error: 'Bolão não encontrado' });
 
-    // --- BLOQUEIO DE SEGURANÇA ---
-    if (!bolao.aberto) {
-      return res.status(400).json({ error: 'As apostas para este bolão já foram encerradas!' });
-    }
-    // -----------------------------
+    const valorTotal = bolao.valorCota * quantidade;
 
-    const total = bolao.valorCota * quantidade;
-    // ... resto do código
-
-    // Cria participante vinculado ao usuário
+    // Cria o registro no banco (Pendente)
     const participante = await prisma.participante.create({
       data: {
         bolaoId,
         usuarioId,
-        nomesCotas, // Array de Strings
+        nomesCotas,
         quantidade,
-        valorTotal: total,
-        status: 'pendente'
-      }
+        valorTotal,
+        status: 'pendente',
+        metodo: metodo || 'PIX' // Se não vier nada, assume PIX
+      },
+      include: { usuario: true }
     });
 
-    const paymentData = await payment.create({
-      body: {
-        transaction_amount: total,
-        description: `Bolão Mega - Concurso ${bolao.concurso}`,
-        payment_method_id: 'pix',
-        payer: {
-          email: 'user_bolao@email.com',
-          first_name: usuario.nome.split(' ')[0],
-          last_name: usuario.nome.split(' ').slice(1).join(' ') || 'User'
-        },
-        notification_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/pagamento/webhook`,
-        external_reference: participante.id,
-      }
-    });
+    // --- SE FOR DINHEIRO ---
+    if (metodo === 'DINHEIRO') {
+      // Manda mensagem pro Alexandre aprovar
+      await solicitarAprovacaoTelegram(
+        participante.id, 
+        participante.usuario.nome, 
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorTotal),
+        quantidade
+      );
+      
+      return res.status(200).json({ 
+        tipo: 'DINHEIRO',
+        message: 'Aguardando aprovação do admin'
+      });
+    }
 
-    const ticket = paymentData.point_of_interaction?.transaction_data;
-
+    // --- SE FOR PIX (Fluxo Antigo) ---
+    const pixData = await gerarPix(valorTotal, `Bolao-${bolao.concurso}`, participante.usuario.email, participante.id);
+    
     return res.status(200).json({
-      qr_code: ticket?.qr_code,
-      qr_code_base64: ticket?.qr_code_base64,
-      participanteId: participante.id 
+      tipo: 'PIX',
+      qr_code: pixData.qr_code,
+      qr_code_base64: pixData.qr_code_base64,
+      ticket_url: pixData.ticket_url
     });
 
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Erro ao processar' });
+    return res.status(500).json({ error: 'Erro ao criar pagamento' });
   }
 }
