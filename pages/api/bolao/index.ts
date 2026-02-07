@@ -7,19 +7,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { method } = req;
 
   try {
-    // GET: Pega o bolão mais recente
+    // GET: Pega bolão (Se tiver ?id=... pega específico, senão pega o último)
     if (method === 'GET') {
-      const bolao = await prisma.bolao.findFirst({
-        orderBy: { criadoEm: 'desc' },
-        include: {
-          participantes: {
-            include: { usuario: true },
-            orderBy: { dataPagamento: 'desc' }
-          },
-          apostas: true
-        }
-      });
-      return res.status(200).json(bolao);
+      const { id } = req.query;
+
+      if (id && typeof id === 'string') {
+        // Busca Específica (Para o Admin quando clica na lista)
+        const bolaoEspecifico = await prisma.bolao.findUnique({
+          where: { id },
+          include: {
+            participantes: {
+              include: { usuario: true },
+              orderBy: { dataPagamento: 'desc' }
+            },
+            apostas: true
+          }
+        });
+        return res.status(200).json(bolaoEspecifico);
+      } else {
+        // Busca Padrão (Para a Home - Último criado)
+        const bolaoRecente = await prisma.bolao.findFirst({
+          orderBy: { criadoEm: 'desc' },
+          include: {
+            participantes: {
+              include: { usuario: true },
+              orderBy: { dataPagamento: 'desc' }
+            },
+            apostas: true
+          }
+        });
+        return res.status(200).json(bolaoRecente);
+      }
     }
 
     // POST: Cria novo bolão
