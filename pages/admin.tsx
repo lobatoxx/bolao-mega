@@ -33,6 +33,7 @@ export default function AdminPage() {
   const [novoData, setNovoData] = useState('');
   const [novoPremio, setNovoPremio] = useState('');
   const [novoValorCota, setNovoValorCota] = useState('');
+  const [novoTipoUnica, setNovoTipoUnica] = useState(false);
   const [apostasValendo, setApostasValendo] = useState<any[]>([]);
 
   // --- ESTADOS: CATÁLOGO (GRID 01-60) ---
@@ -99,14 +100,14 @@ export default function AdminPage() {
     } catch (err: any) { alert(err.response?.data?.error); }
   };
 
-  const handleEditClick = () => { if(!bolao) return; setEditMode(true); setNovoConcurso(bolao.concurso); setNovoData(formatDateInput(bolao.dataSorteio)); setNovoPremio(bolao.premioEstimado); setNovoValorCota(bolao.valorCota); };
+  const handleEditClick = () => { if(!bolao) return; setEditMode(true); setNovoConcurso(bolao.concurso); setNovoData(formatDateInput(bolao.dataSorteio)); setNovoPremio(bolao.premioEstimado); setNovoValorCota(bolao.valorCota); setNovoTipoUnica(bolao.tipoCotaUnica);};
   const handleCancelEdit = () => { setEditMode(false); };
   
   const handleSalvarBolao = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (editMode) {
-        await axios.put('/api/bolao', { id: bolao.id, concurso: novoConcurso, dataSorteio: novoData, premioEstimado: novoPremio, valorCota: novoValorCota, aberto: bolao.aberto, adminPassword: password });
+        await axios.put('/api/bolao', { id: bolao.id, concurso: novoConcurso, dataSorteio: novoData, premioEstimado: novoPremio, valorCota: novoValorCota, aberto: bolao.aberto, adminPassword: password, tipoCotaUnica: novoTipoUnica  });
         alert('Atualizado!'); handleCancelEdit();
       } else {
         if(!confirm('Criar novo bolão?')) return;
@@ -240,6 +241,21 @@ export default function AdminPage() {
                 <input type="number" placeholder="Prêmio" className="p-3 bg-gray-900 rounded border border-gray-600 w-full" value={novoPremio} onChange={e => setNovoPremio(e.target.value)} />
                 <input type="number" placeholder="Cota R$" className="p-3 bg-gray-900 rounded border border-gray-600 w-full" value={novoValorCota} onChange={e => setNovoValorCota(e.target.value)} />
               </div>
+              
+              {/* NOVO SWITCH DE MODO DE JOGO */}
+              <div className="mt-4 flex items-center gap-3 bg-gray-900 p-3 rounded border border-gray-600">
+                 <button 
+                   type="button"
+                   onClick={() => setNovoTipoUnica(!novoTipoUnica)}
+                   className={`w-12 h-6 rounded-full p-1 transition-colors ${novoTipoUnica ? 'bg-emerald-500' : 'bg-gray-600'}`}
+                 >
+                   <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${novoTipoUnica ? 'translate-x-6' : 'translate-x-0'}`} />
+                 </button>
+                 <span className="text-sm font-bold text-gray-300">
+                    {novoTipoUnica ? 'Modo Cota Única (Restrito)' : 'Modo Multi Cotas (Livre)'}
+                 </span>
+              </div>
+              
               <button onClick={handleSalvarBolao} className="w-full mt-4 py-3 rounded font-bold bg-blue-600 hover:bg-blue-500"><Save size={18} className="inline mr-2"/> Salvar</button>
             </div>
 

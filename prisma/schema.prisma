@@ -26,6 +26,7 @@ model Bolao {
   premioEstimado Float
   valorCota      Float
   aberto         Boolean           @default(true)
+  tipoCotaUnica  Boolean           @default(false)
   participantes  Participante[]
   apostas        ApostaRealizada[]
   criadoEm       DateTime          @default(now())

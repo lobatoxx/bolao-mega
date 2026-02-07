@@ -39,6 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           dataSorteio: new Date(dataSorteio),
           premioEstimado: Number(premioEstimado),
           valorCota: Number(valorCota),
+          tipoCotaUnica: Boolean(tipoCotaUnica), // <-- Salva
           aberto: true
         }
       });
@@ -77,6 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           dataSorteio: new Date(dataSorteio),
           premioEstimado: Number(premioEstimado),
           valorCota: Number(valorCota),
+          tipoCotaUnica: Boolean(tipoCotaUnica), // <-- Atualiza
           aberto
         }
       });

@@ -1,0 +1,1 @@
+Acessar o banco de dados via navegador = npx prisma studio
