@@ -24,7 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // POST: Cria novo bolão
     if (method === 'POST') {
-      const { concurso, dataSorteio, premioEstimado, valorCota, adminPassword } = req.body;
+      // AQUI ESTAVA O ERRO: Precisamos extrair 'tipoCotaUnica' do corpo da requisição
+      const { concurso, dataSorteio, premioEstimado, valorCota, tipoCotaUnica, adminPassword } = req.body;
 
       if (adminPassword !== process.env.ADMIN_PASSWORD) {
         return res.status(401).json({ error: 'Senha incorreta' });
@@ -39,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           dataSorteio: new Date(dataSorteio),
           premioEstimado: Number(premioEstimado),
           valorCota: Number(valorCota),
-          tipoCotaUnica: Boolean(tipoCotaUnica), // <-- Salva
+          tipoCotaUnica: Boolean(tipoCotaUnica), // Agora a variável existe!
           aberto: true
         }
       });
@@ -48,20 +49,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // PUT: Atualiza/Fecha bolão
     if (method === 'PUT') {
-      const { id, concurso, dataSorteio, premioEstimado, valorCota, aberto, adminPassword } = req.body;
+      // AQUI TAMBÉM: Adicionei 'tipoCotaUnica' na leitura
+      const { id, concurso, dataSorteio, premioEstimado, valorCota, tipoCotaUnica, aberto, adminPassword } = req.body;
 
       if (adminPassword !== process.env.ADMIN_PASSWORD) {
         return res.status(401).json({ error: 'Senha incorreta' });
       }
 
       // --- TRAVA DE SEGURANÇA (PAGAMENTO EM DINHEIRO) ---
-      // Se estiver tentando FECHAR o bolão (aberto = false)
       if (aberto === false) {
          const pendencias = await prisma.participante.count({
            where: { 
              bolaoId: id, 
              status: 'pendente',
-             metodo: 'DINHEIRO' // Agora isso vai funcionar pois atualizamos o schema
+             metodo: 'DINHEIRO'
            }
          });
          
@@ -78,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           dataSorteio: new Date(dataSorteio),
           premioEstimado: Number(premioEstimado),
           valorCota: Number(valorCota),
-          tipoCotaUnica: Boolean(tipoCotaUnica), // <-- Atualiza
+          tipoCotaUnica: Boolean(tipoCotaUnica), // Atualiza o tipo
           aberto
         }
       });
