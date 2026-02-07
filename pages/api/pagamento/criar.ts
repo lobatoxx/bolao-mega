@@ -16,7 +16,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const valorTotal = bolao.valorCota * quantidade;
 
-    // Cria o registro no banco (Pendente)
     const participante = await prisma.participante.create({
       data: {
         bolaoId,
@@ -30,38 +29,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       include: { usuario: true }
     });
 
-    // --- SE FOR DINHEIRO ---
     if (metodo === 'DINHEIRO') {
-      // Manda mensagem pro Alexandre aprovar
       await solicitarAprovacaoTelegram(
         participante.id, 
         participante.usuario.nome, 
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorTotal),
         quantidade
       );
-      
-      return res.status(200).json({ 
-        tipo: 'DINHEIRO',
-        message: 'Aguardando aprovação do admin'
-      });
+      return res.status(200).json({ tipo: 'DINHEIRO', message: 'Aguardando admin' });
     }
 
-    // --- SE FOR PIX (Fluxo Antigo) ---
-    // CORREÇÃO: Usamos um email genérico pois o usuário não tem email no cadastro
+    // PIX
     const emailPagador = 'participante@bolao.com'; 
-
-    const pixData = await gerarPix(
-        valorTotal, 
-        `Bolao-${bolao.concurso}`, 
-        emailPagador, // Aqui estava o erro (participante.usuario.email)
-        participante.id
-    );
+    const pixData = await gerarPix(valorTotal, `Bolao-${bolao.concurso}`, emailPagador, participante.id);
     
     return res.status(200).json({
       tipo: 'PIX',
       qr_code: pixData.qr_code,
       qr_code_base64: pixData.qr_code_base64,
-      ticket_url: pixData.ticket_url
+      ticket_url: pixData.ticket_url,
+      id: pixData.id // <--- IMPORTANTE: Agora enviamos o ID
     });
 
   } catch (error) {
